@@ -97,7 +97,7 @@ public class AIOMagicPlugin extends Plugin {
 	@Override
 	protected void startUp() throws AWTException {
 		combatSpell = config.combatSpell();
-		alchItemNames = updateItemList(config.alchItems());
+        alchItemNames = updateItemList(config.alchItems());
 		superHeatItem = config.superHeatItem();
 		npcName = config.npcName();
 		teleportSpell = config.teleportSpell();
@@ -155,6 +155,7 @@ public class AIOMagicPlugin extends Plugin {
 		if (event.getKey().equals(AIOMagicConfig.alchItems)) {
 			alchItemNames = updateItemList(config.alchItems());
 		}
+
 
 		if (event.getKey().equals(AIOMagicConfig.superHeatItem)) {
 			superHeatItem = config.superHeatItem();
