@@ -109,11 +109,11 @@ public class AIOMagicPlugin extends Plugin {
 		}
 
 		switch (config.magicActivity()) {
+            case ALCHING:
+                alchScript.run();
+                break;
 			case SPLASHING:
 				splashScript.run();
-				break;
-			case ALCHING:
-				alchScript.run();
 				break;
 			case SUPERHEAT:
 				superHeatScript.run();

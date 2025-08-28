@@ -1,8 +1,8 @@
 package net.runelite.client.plugins.microbot.magic.aiomagic.enums;
 
 public enum MagicActivity {
-    SPLASHING,
     ALCHING,
+    SPLASHING,
     SUPERHEAT,
     TELEPORT,
     TELEALCH,

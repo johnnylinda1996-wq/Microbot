@@ -12,10 +12,10 @@ import net.runelite.client.plugins.microbot.util.magic.Rs2CombatSpells;
 
 @ConfigGroup(AIOMagicConfig.configGroup)
 public interface AIOMagicConfig extends Config {
+    String alchItems = "alchItems";
     String configGroup = "aio-magic";
     String activity = "magicActivity";
     String combatSpell = "magicCombatSpell";
-    String alchItems = "alchItems";
     String alchprofit = "alchprofit";
     String superHeatItem = "superHeatItem";
     String npcName = "npcName";
@@ -32,94 +32,11 @@ public interface AIOMagicConfig extends Config {
     String generalSection = "general";
 
     @ConfigSection(
-            name = "Alch Settings",
-            description = "Configure Alching settings",
+            name = "JP96NL's Alcher Bot Settings",
+            description = "Configure Alching bot settings",
             position = 1
     )
     String alchSection = "alch";
-
-    @ConfigSection(
-            name = "Stun Settings",
-            description = "Configure splashing settings",
-            position = 1
-    )
-    String stunSection = "stun";
-
-    @ConfigSection(
-            name = "Splashing Settings",
-            description = "Configure Stun settings",
-            position = 2
-    )
-    String splashSection = "splash";
-
-    @ConfigSection(
-            name = "SuperHeat Settings",
-            description = "Configure SuperHeat settings",
-            position = 2
-    )
-    String superHeatSection = "superHeat";
-
-    @ConfigSection(
-            name = "Teleport Settings",
-            description = "Configure teleport settings",
-            position = 3
-    )
-    String teleportSection = "teleport";
-
-    @ConfigItem(
-            keyName = activity,
-            name = "Activity",
-            description = "Select the activity you would like to perform",
-            position = 0,
-            section = generalSection
-    )
-    default MagicActivity magicActivity() {
-        return MagicActivity.SPLASHING;
-    }
-
-    @ConfigItem(
-            keyName = stunNpcName,
-            name = "Stun npc name",
-            description = "Name of the npc to stun",
-            position = 0,
-            section = stunSection
-    )
-    default String stunNpcName() {
-        return "";
-    }
-
-    @ConfigItem(
-            keyName = stunSpell,
-            name = "Stun spell",
-            description = "Name of the stun spell",
-            position = 1,
-            section = stunSection
-    )
-    default StunSpell stunSpell() {
-        return StunSpell.STUN;
-    }
-
-    @ConfigItem(
-            keyName = npcName,
-            name = "NPC Name",
-            description = "Name of the NPC you would like to splash",
-            position = 0,
-            section = splashSection
-    )
-    default String npcName() {
-        return "";
-    }
-
-    @ConfigItem(
-            keyName = combatSpell,
-            name = "Combat Spell",
-            description = "Select the spell you would like to splash with",
-            position = 1,
-            section = splashSection
-    )
-    default Rs2CombatSpells combatSpell() {
-        return Rs2CombatSpells.WIND_STRIKE;
-    }
 
     @ConfigItem(
             keyName = alchItems,
@@ -240,6 +157,88 @@ public interface AIOMagicConfig extends Config {
         return 15;
     }
 
+    @ConfigSection(
+            name = "Stun Settings",
+            description = "Configure splashing settings",
+            position = 1
+    )
+    String stunSection = "stun";
+
+    @ConfigSection(
+            name = "Splashing Settings",
+            description = "Configure Stun settings",
+            position = 2
+    )
+    String splashSection = "splash";
+
+    @ConfigSection(
+            name = "SuperHeat Settings",
+            description = "Configure SuperHeat settings",
+            position = 2
+    )
+    String superHeatSection = "superHeat";
+
+    @ConfigSection(
+            name = "Teleport Settings",
+            description = "Configure teleport settings",
+            position = 3
+    )
+    String teleportSection = "teleport";
+
+    @ConfigItem(
+            keyName = activity,
+            name = "Activity",
+            description = "Select the activity you would like to perform",
+            position = 0,
+            section = generalSection
+    )
+    default MagicActivity magicActivity() {
+        return MagicActivity.SPLASHING;
+    }
+
+    @ConfigItem(
+            keyName = stunNpcName,
+            name = "Stun npc name",
+            description = "Name of the npc to stun",
+            position = 0,
+            section = stunSection
+    )
+    default String stunNpcName() {
+        return "";
+    }
+
+    @ConfigItem(
+            keyName = stunSpell,
+            name = "Stun spell",
+            description = "Name of the stun spell",
+            position = 1,
+            section = stunSection
+    )
+    default StunSpell stunSpell() {
+        return StunSpell.STUN;
+    }
+
+    @ConfigItem(
+            keyName = npcName,
+            name = "NPC Name",
+            description = "Name of the NPC you would like to splash",
+            position = 0,
+            section = splashSection
+    )
+    default String npcName() {
+        return "";
+    }
+
+    @ConfigItem(
+            keyName = combatSpell,
+            name = "Combat Spell",
+            description = "Select the spell you would like to splash with",
+            position = 1,
+            section = splashSection
+    )
+    default Rs2CombatSpells combatSpell() {
+        return Rs2CombatSpells.WIND_STRIKE;
+    }
 
     @ConfigItem(
             keyName = superHeatItem,
