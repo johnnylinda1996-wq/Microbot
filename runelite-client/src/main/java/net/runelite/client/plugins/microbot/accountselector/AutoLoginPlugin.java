@@ -20,7 +20,7 @@ import java.awt.*;
         name = PluginDescriptor.Mocrosoft + "AutoLogin",
         description = "Microbot autologin plugin",
         tags = {"account", "microbot", "login"},
-        enabledByDefault = false
+        enabledByDefault = true
 )
 @Slf4j
 public class AutoLoginPlugin extends Plugin {
