@@ -63,7 +63,7 @@ public interface FillLanternConfig extends Config {
             section = generalSection
     )
     default boolean enableBreakHandler() {
-        return true;
+        return false;
     }
 
     @ConfigItem(
@@ -80,29 +80,16 @@ public interface FillLanternConfig extends Config {
     @ConfigItem(
             keyName = "teleportMethod",
             name = "Teleport Method",
-            description = "Method to teleport to Rimmington",
+            description = "Method to travel between locations",
             position = 0,
             section = teleportSection
     )
     default TeleportMethod teleportMethod() {
-        return TeleportMethod.FALADOR_TELEPORT;
-    }
-
-    @ConfigItem(
-            keyName = "useHouseTeleport",
-            name = "Use House Teleport for Banking",
-            description = "Use house teleport to get to POH for banking (requires house in Rimmington)",
-            position = 1,
-            section = teleportSection
-    )
-    default boolean useHouseTeleport() {
-        return false;
+        return TeleportMethod.RUNES_TELEPORT;
     }
 
     enum TeleportMethod {
-        FALADOR_TELEPORT("Falador Teleport"),
-        RIMMINGTON_TELEPORT("Rimmington Teleport"),
-        HOUSE_TELEPORT("House Teleport"),
+        RUNES_TELEPORT("Teleport with Runes"),
         WALKING("Walking");
 
         private final String name;

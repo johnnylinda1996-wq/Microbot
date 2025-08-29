@@ -13,7 +13,7 @@ import java.awt.*;
 
 @PluginDescriptor(
         name = PluginDescriptor.JP96NL + "Bullseye Lantern Filler",
-        description = "Automatically fills bullseye lanterns with swamp tar for profit. Features multiple teleport methods and integrated break handling.",
+        description = "Automatically fills bullseye lanterns with swamp tar for profit. Features teleportation with runes and integrated break handling.",
         tags = {"Skilling", "microbot", "profit", "lanterns", "rimmington", "money making"},
         enabledByDefault = false
 )
@@ -37,25 +37,59 @@ public class FillLanternPlugin extends Plugin {
     @Inject
     public FillLanternScript fillLanternScript;
 
+    private boolean originalBreakHandlerState = false;
+
     @Override
     protected void startUp() throws AWTException {
         Microbot.pauseAllScripts.set(false);
+
+        // Store the original break handler state
+        originalBreakHandlerState = config.enableBreakHandler();
 
         if (overlayManager != null) {
             overlayManager.add(fillLanternOverlay);
         }
 
+        // Start the script with the current configuration
         fillLanternScript.run(config, this);
 
-        Microbot.log("Bullseye Lantern Filler started!");
+        Microbot.log("Bullseye Lantern Filler v" + FillLanternScript.version + " started!");
         Microbot.log("Teleport method: " + config.teleportMethod().getName());
         Microbot.log("Anti-ban enabled: " + config.enableAntiban());
-        Microbot.log("Break handler enabled: " + config.enableBreakHandler());
+
+        // Only enable break handler if user has it enabled
+        if (config.enableBreakHandler()) {
+            Microbot.log("Break handler enabled: " + config.enableBreakHandler());
+        } else {
+            Microbot.log("Break handler disabled by user");
+        }
+    }
+
+    /**
+     * Get the current running script instance
+     * @return The FillLanternScript instance
+     */
+    private FillLanternScript script = null;
+    public FillLanternScript getScript() {
+        return this.script;
     }
 
     protected void shutDown() {
-        fillLanternScript.shutdown();
-        overlayManager.remove(fillLanternOverlay);
-        Microbot.log("Bullseye Lantern Filler stopped!");
+        try {
+            fillLanternScript.shutdown();
+
+            if (overlayManager != null && fillLanternOverlay != null) {
+                overlayManager.remove(fillLanternOverlay);
+            }
+
+            Microbot.log("Bullseye Lantern Filler stopped!");
+        } catch (Exception e) {
+            Microbot.log("Error during shutdown: " + e.getMessage());
+        }
+    }
+
+    // Method to check if break handler was enabled by user
+    public boolean wasBreakHandlerEnabledByUser() {
+        return originalBreakHandlerState;
     }
 }
