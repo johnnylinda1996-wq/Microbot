@@ -3,14 +3,20 @@ package net.runelite.client.plugins.microbot.aiobot.tasks;
 import lombok.Getter;
 import net.runelite.client.plugins.microbot.aiobot.enums.QuestType;
 
-public class AioQuestTask implements AioTask {
-    @Getter
+@Getter
+public class AioQuestTask extends AioTask {
+
     private final QuestType questType;
     private boolean complete;
 
     public AioQuestTask(QuestType questType) {
+        super(TaskType.QUEST);
         this.questType = questType;
     }
+
+    @Override
+    public boolean isComplete() { return complete; }
+    public void markComplete() { complete = true; }
 
     @Override
     public String getDisplay() {
@@ -18,17 +24,5 @@ public class AioQuestTask implements AioTask {
     }
 
     @Override
-    public boolean isComplete() {
-        return complete;
-    }
-
-    @Override
-    public void markComplete() {
-        complete = true;
-    }
-
-    @Override
-    public TaskType getType() {
-        return TaskType.QUEST;
-    }
+    public QuestType getQuestTypeOrNull() { return questType; }
 }

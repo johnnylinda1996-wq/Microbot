@@ -2,45 +2,41 @@ package net.runelite.client.plugins.microbot.aiobot.tasks;
 
 import lombok.Getter;
 import net.runelite.api.Skill;
+import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.aiobot.enums.SkillType;
 
-public class AioSkillTask implements AioTask {
-    @Getter
+@Getter
+public class AioSkillTask extends AioTask {
+
     private final SkillType skillType;
-    @Getter
-    private final int targetLevel;
-    @Getter
-    private final int startLevel; // captured at creation (optional usage)
+    private final int startLevel;
+    private final int targetLevel; // 0 => fallback config
     private boolean complete;
 
+    private int startXp = -1;
+    private int lastXp = -1;
+    private int xpGained = 0;
+
     public AioSkillTask(SkillType skillType, int startLevel, int targetLevel) {
+        super(TaskType.SKILL);
         this.skillType = skillType;
         this.startLevel = startLevel;
         this.targetLevel = targetLevel;
     }
 
     @Override
+    public boolean isComplete() { return complete; }
+    public void markComplete() { complete = true; }
+
+    @Override
     public String getDisplay() {
-        return "Skill: " + skillType.getDisplayName() + " -> " + targetLevel;
+        return "Skill: " + skillType.name() + " -> " + (targetLevel == 0 ? "(cfg)" : targetLevel);
     }
 
     @Override
-    public boolean isComplete() {
-        return complete;
-    }
-
-    @Override
-    public void markComplete() {
-        complete = true;
-    }
-
-    @Override
-    public TaskType getType() {
-        return TaskType.SKILL;
-    }
+    public SkillType getSkillTypeOrNull() { return skillType; }
 
     public Skill toRuneLiteSkill() {
-        // Mapping by name similarity
         switch (skillType) {
             case ATTACK: return Skill.ATTACK;
             case STRENGTH: return Skill.STRENGTH;
@@ -66,6 +62,34 @@ public class AioSkillTask implements AioTask {
             case WOODCUTTING: return Skill.WOODCUTTING;
             case FARMING: return Skill.FARMING;
         }
-        return null;
+        return Skill.ATTACK;
+    }
+
+    public int currentLevel() {
+        if (Microbot.getClient() == null) return 0;
+        return Microbot.getClient().getRealSkillLevel(toRuneLiteSkill());
+    }
+
+    public int currentXp() {
+        if (Microbot.getClient() == null) return 0;
+        return Microbot.getClient().getSkillExperience(toRuneLiteSkill());
+    }
+
+    public void updateXpTracking() {
+        int cur = currentXp();
+        if (startXp < 0) {
+            startXp = cur;
+            lastXp = cur;
+            xpGained = 0;
+            return;
+        }
+        if (cur != lastXp) {
+            xpGained = cur - startXp;
+            lastXp = cur;
+        }
+    }
+
+    public int getXpGained() {
+        return xpGained;
     }
 }

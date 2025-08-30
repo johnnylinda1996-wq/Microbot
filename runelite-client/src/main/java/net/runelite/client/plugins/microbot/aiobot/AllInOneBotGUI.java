@@ -27,10 +27,20 @@ public class AllInOneBotGUI extends JFrame {
     private JList<String> queueList;
     private JButton removeSelectedButton;
     private JButton startButton;
+    private JButton pauseButton;
     private JButton clearButton;
+    private JButton refreshButton;
 
     private JLabel currentTaskLabel;
     private JLabel statusLabel;
+    private JLabel levelLabel;
+    private JLabel xpGainedLabel;
+    private JLabel xpPerHourLabel;
+    private JLabel xpRemainingLabel;
+    private JProgressBar progressBar;
+    private JLabel elapsedLabel;
+
+    private final Timer uiTimer;
 
     public AllInOneBotGUI(AllInOneScript script) {
         super("AIO Bot Manager");
@@ -39,9 +49,12 @@ public class AllInOneBotGUI extends JFrame {
         layoutComponents();
         attachListeners();
         refreshQueue();
-        setMinimumSize(new Dimension(720, 520));
+        setMinimumSize(new Dimension(820, 580));
         setLocationRelativeTo(null);
         setVisible(true);
+
+        uiTimer = new Timer(1000, e -> refreshStatus());
+        uiTimer.start();
     }
 
     private void initComponents() {
@@ -62,10 +75,19 @@ public class AllInOneBotGUI extends JFrame {
 
         removeSelectedButton = new JButton("Remove Selected");
         startButton = new JButton("Start / Resume");
+        pauseButton = new JButton("Pause");
         clearButton = new JButton("Clear Queue");
+        refreshButton = new JButton("Refresh");
 
         currentTaskLabel = new JLabel("Current: none");
         statusLabel = new JLabel("Status: " + (Microbot.status == null ? "" : Microbot.status));
+        levelLabel = new JLabel("Level: -");
+        xpGainedLabel = new JLabel("XP Gained: 0");
+        xpPerHourLabel = new JLabel("XP/h: 0");
+        xpRemainingLabel = new JLabel("Remaining: -");
+        elapsedLabel = new JLabel("Elapsed: 0s");
+        progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(true);
     }
 
     private JPanel buildSkillPanel() {
@@ -104,59 +126,76 @@ public class AllInOneBotGUI extends JFrame {
     }
 
     private JPanel buildQueuePanel() {
-        JPanel p = new JPanel(new BorderLayout(5,5));
-        p.setBorder(new TitledBorder("Task Queue"));
-        JScrollPane scroll = new JScrollPane(queueList);
-        p.add(scroll, BorderLayout.CENTER);
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBorder(new TitledBorder("Queue"));
+        p.add(new JScrollPane(queueList), BorderLayout.CENTER);
 
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
         buttons.add(removeSelectedButton);
         buttons.add(clearButton);
-        buttons.add(startButton);
+        buttons.add(refreshButton);
         p.add(buttons, BorderLayout.SOUTH);
+        return p;
+    }
+
+    private JPanel buildControlPanel() {
+        JPanel p = new JPanel(new GridLayout(0,1,3,3));
+        p.setBorder(new TitledBorder("Control"));
+
+        p.add(startButton);
+        p.add(pauseButton);
 
         return p;
     }
 
     private JPanel buildStatusPanel() {
-        JPanel p = new JPanel(new GridLayout(0,1));
-        p.setBorder(new TitledBorder("Runtime"));
+        JPanel p = new JPanel(new GridLayout(0,1,2,2));
+        p.setBorder(new TitledBorder("Status"));
         p.add(currentTaskLabel);
         p.add(statusLabel);
+        p.add(levelLabel);
+        p.add(xpGainedLabel);
+        p.add(xpPerHourLabel);
+        p.add(xpRemainingLabel);
+        p.add(elapsedLabel);
+        p.add(progressBar);
         return p;
     }
 
     private void layoutComponents() {
-        setLayout(new BorderLayout(10,10));
-        JPanel left = new JPanel();
-        left.setLayout(new BoxLayout(left, BoxLayout.Y_AXIS));
-        left.add(buildSkillPanel());
-        left.add(Box.createVerticalStrut(10));
-        left.add(buildQuestPanel());
-        add(left, BorderLayout.WEST);
+        JPanel left = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = baseGbc();
 
-        add(buildQueuePanel(), BorderLayout.CENTER);
-        add(buildStatusPanel(), BorderLayout.SOUTH);
-        pack();
+        left.add(buildSkillPanel(), gbc);
+        gbc.gridy++;
+        left.add(buildQuestPanel(), gbc);
+        gbc.gridy++;
+        left.add(buildControlPanel(), gbc);
+        gbc.gridy++;
+        left.add(buildStatusPanel(), gbc);
+
+        JPanel right = new JPanel(new BorderLayout(5,5));
+        right.add(buildQueuePanel(), BorderLayout.CENTER);
+
+        JPanel root = new JPanel(new BorderLayout(8,8));
+        root.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
+        root.add(left, BorderLayout.WEST);
+        root.add(right, BorderLayout.CENTER);
+
+        setContentPane(root);
     }
 
     private void attachListeners() {
         addSkillButton.addActionListener(e -> {
-            SkillType skill = (SkillType) skillCombo.getSelectedItem();
+            SkillType st = (SkillType) skillCombo.getSelectedItem();
             int target = (int) targetLevelSpinner.getValue();
-            if (skill == null) return;
-            int current = 1;
-            try {
-                current = Microbot.getClient().getRealSkillLevel(skillToApi(skill));
-            } catch (Exception ignored) {}
-            script.addTask(new AioSkillTask(skill, current, target));
+            script.addSkillTask(st, target);
             refreshQueue();
         });
 
         addQuestButton.addActionListener(e -> {
-            QuestType quest = (QuestType) questCombo.getSelectedItem();
-            if (quest == null) return;
-            script.addTask(new AioQuestTask(quest));
+            QuestType qt = (QuestType) questCombo.getSelectedItem();
+            script.addQuestTask(qt);
             refreshQueue();
         });
 
@@ -169,71 +208,73 @@ public class AllInOneBotGUI extends JFrame {
         });
 
         clearButton.addActionListener(e -> {
-            while (!script.getSnapshotQueue().isEmpty()) {
-                script.removeTask(0);
-            }
+            script.clearQueue();
             refreshQueue();
         });
 
         startButton.addActionListener(e -> {
             if (!script.isRunning()) {
                 script.startLoop();
+            } else {
+                script.resumeLoop();
             }
         });
 
-        new Timer(1000, e -> refreshRuntime()).start();
+        pauseButton.addActionListener(e -> {
+            if (script.isPaused()) {
+                script.resumeLoop();
+            } else {
+                script.pauseLoop();
+            }
+            updatePauseLabel();
+        });
+
+        refreshButton.addActionListener(e -> {
+            refreshQueue();
+            refreshStatus();
+        });
     }
 
     private void refreshQueue() {
         queueModel.clear();
-        script.getSnapshotQueue().forEach(t -> queueModel.addElement(t.getDisplay()));
+        for (String s : script.getQueueDisplay()) {
+            queueModel.addElement(s);
+        }
     }
 
-    private void refreshRuntime() {
-        if (script.getCurrentTask() != null) {
-            currentTaskLabel.setText("Current: " + script.getCurrentTask().getDisplay());
+    private void refreshStatus() {
+        StatusAccessor sa = script.getStatusAccessor();
+        currentTaskLabel.setText("Current: " + sa.getCurrentTask());
+        statusLabel.setText("Status: " + sa.getStatus());
+        if (sa.getTargetLevel() > 0) {
+            levelLabel.setText("Level: " + sa.getCurrentLevel() + "/" + sa.getTargetLevel());
         } else {
-            currentTaskLabel.setText("Current: none");
+            levelLabel.setText("Level: " + sa.getCurrentLevel());
         }
-        statusLabel.setText("Status: " + (Microbot.status == null ? "" : Microbot.status));
+        xpGainedLabel.setText("XP Gained: " + sa.getXpGained());
+        xpPerHourLabel.setText("XP/h: " + (long)sa.getXpPerHour());
+        xpRemainingLabel.setText("Remaining: " + (sa.getXpToTarget() < 0 ? "-" : sa.getXpToTarget()));
+        elapsedLabel.setText("Elapsed: " + (sa.getTaskElapsedMs()/1000) + "s");
+
+        double pct = sa.getPercentToTarget();
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        progressBar.setValue((int) Math.round(pct));
+        progressBar.setString(String.format("%.1f%%", pct));
+
+        updatePauseLabel();
     }
 
-    private net.runelite.api.Skill skillToApi(SkillType st) {
-        switch (st) {
-            case ATTACK: return net.runelite.api.Skill.ATTACK;
-            case STRENGTH: return net.runelite.api.Skill.STRENGTH;
-            case DEFENCE: return net.runelite.api.Skill.DEFENCE;
-            case RANGED: return net.runelite.api.Skill.RANGED;
-            case PRAYER: return net.runelite.api.Skill.PRAYER;
-            case MAGIC: return net.runelite.api.Skill.MAGIC;
-            case RUNECRAFTING: return net.runelite.api.Skill.RUNECRAFT;
-            case CONSTRUCTION: return net.runelite.api.Skill.CONSTRUCTION;
-            case HITPOINTS: return net.runelite.api.Skill.HITPOINTS;
-            case AGILITY: return net.runelite.api.Skill.AGILITY;
-            case HERBLORE: return net.runelite.api.Skill.HERBLORE;
-            case THIEVING: return net.runelite.api.Skill.THIEVING;
-            case CRAFTING: return net.runelite.api.Skill.CRAFTING;
-            case FLETCHING: return net.runelite.api.Skill.FLETCHING;
-            case SLAYER: return net.runelite.api.Skill.SLAYER;
-            case HUNTER: return net.runelite.api.Skill.HUNTER;
-            case MINING: return net.runelite.api.Skill.MINING;
-            case SMITHING: return net.runelite.api.Skill.SMITHING;
-            case FISHING: return net.runelite.api.Skill.FISHING;
-            case COOKING: return net.runelite.api.Skill.COOKING;
-            case FIREMAKING: return net.runelite.api.Skill.FIREMAKING;
-            case WOODCUTTING: return net.runelite.api.Skill.WOODCUTTING;
-            case FARMING: return net.runelite.api.Skill.FARMING;
-        }
-        return net.runelite.api.Skill.ATTACK;
+    private void updatePauseLabel() {
+        pauseButton.setText(script.isPaused() ? "Resume" : "Pause");
     }
 
-    // FIX: toegevoegd helper methode baseGbc()
     private GridBagConstraints baseGbc() {
         GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4,4,4,4);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.anchor = GridBagConstraints.WEST;
-        gbc.insets = new Insets(4,4,4,4);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         return gbc;
     }

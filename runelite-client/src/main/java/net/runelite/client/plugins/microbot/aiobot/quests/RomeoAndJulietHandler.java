@@ -5,6 +5,6 @@ import net.runelite.client.plugins.microbot.Microbot;
 public class RomeoAndJulietHandler implements QuestHandler {
     @Override
     public void execute() {
-        Microbot.status = "Romeo & Juliet - Not implemented yet";
+        Microbot.status = "Quest: Romeo & Juliet (placeholder)";
     }
 }

@@ -15,14 +15,13 @@ import net.runelite.client.plugins.microbot.aiobot.quests.*;
 import net.runelite.client.plugins.microbot.aiobot.settings.SkillRuntimeSettings;
 import net.runelite.client.plugins.microbot.aiobot.settings.SkillSettingsRegistry;
 import net.runelite.client.plugins.microbot.aiobot.skills.*;
-import net.runelite.client.plugins.microbot.aiobot.tasks.AioQuestTask;
-import net.runelite.client.plugins.microbot.aiobot.tasks.AioSkillTask;
-import net.runelite.client.plugins.microbot.aiobot.tasks.AioTask;
+import net.runelite.client.plugins.microbot.aiobot.tasks.*;
+import net.runelite.client.plugins.microbot.aiobot.queue.QueueManager;
+import net.runelite.client.plugins.microbot.aiobot.util.XpUtil;
 import net.runelite.client.plugins.microbot.util.antiban.Rs2Antiban;
 import net.runelite.client.plugins.microbot.util.antiban.enums.Activity;
 
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -40,7 +39,7 @@ public class AllInOneScript extends Script {
     private final Map<SkillType, SkillHandler> skillHandlers = new EnumMap<>(SkillType.class);
     private final Map<QuestType, QuestHandler> questHandlers = new EnumMap<>(QuestType.class);
 
-    private final List<AioTask> taskQueue = new CopyOnWriteArrayList<>();
+    private final QueueManager queueManager = new QueueManager();
 
     @Getter
     private AioTask currentTask;
@@ -54,6 +53,7 @@ public class AllInOneScript extends Script {
     private long lastSettingsRefresh = 0L;
 
     private final Gson gson;
+    private final StatusAccessor statusAccessor = new StatusAccessor();
 
     public AllInOneScript(AllInOneConfig config,
                           ConfigManager configManager,
@@ -73,10 +73,10 @@ public class AllInOneScript extends Script {
         initQuestHandlers();
     }
 
-    /* ================== Queue API ================== */
+    /* Queue API */
 
     public synchronized void addTask(AioTask task) {
-        taskQueue.add(task);
+        queueManager.add(task);
     }
 
     public synchronized void addSkillTask(SkillType skillType, Integer targetLevelOverride) {
@@ -85,33 +85,48 @@ public class AllInOneScript extends Script {
                 : 1;
         int target = (targetLevelOverride != null && targetLevelOverride > 0)
                 ? targetLevelOverride
-                : 99;
-        taskQueue.add(new AioSkillTask(skillType, current, target));
+                : 0; // 0 = fallback config
+        queueManager.add(new AioSkillTask(skillType, current, target));
     }
 
     public synchronized void addQuestTask(QuestType questType) {
-        taskQueue.add(new AioQuestTask(questType));
+        queueManager.add(new AioQuestTask(questType));
     }
 
     public synchronized void removeTask(int index) {
-        if (index >= 0 && index < taskQueue.size()) {
-            taskQueue.remove(index);
+        List<AioTask> snap = queueManager.snapshot();
+        if (index >= 0 && index < snap.size()) {
+            snap.remove(index);
+            queueManager.setNewOrder(snap);
         }
     }
 
     public synchronized void clearQueue() {
-        taskQueue.clear();
+        queueManager.clear();
         currentTask = null;
     }
 
-    public List<AioTask> getSnapshotQueue() {
-        return new ArrayList<>(taskQueue);
+    public synchronized List<String> getQueueDisplay() {
+        List<String> list = new ArrayList<>();
+        for (AioTask t : queueManager.snapshot()) list.add(t.getDisplay());
+        return list;
     }
+
+    public List<AioTask> getQueueSnapshotRaw() {
+        return queueManager.snapshot();
+    }
+
+    public synchronized List<AioTask> getSnapshotQueue() {
+        return queueManager.snapshot();
+    }
+    public synchronized List<AioTask> getQueueSnapshot() { return getSnapshotQueue(); }
+
+    public StatusAccessor getStatusAccessor() { return statusAccessor; }
 
     public boolean isRunning() { return running; }
     public boolean isPaused() { return paused.get(); }
 
-    /* ================== Control ================== */
+    /* Control */
 
     public void startLoop() {
         if (loopFuture != null && !loopFuture.isCancelled()) return;
@@ -120,7 +135,7 @@ public class AllInOneScript extends Script {
         Rs2Antiban.setActivity(Activity.GENERAL_COLLECTING);
         loopFuture = scheduledExecutorService.scheduleWithFixedDelay(
                 this::tickSafe, 0, LOOP_DELAY_MS, TimeUnit.MILLISECONDS);
-        log.info("[AIO] Loop started");
+        log.info("[AIO] Loop gestart");
     }
 
     public void pauseLoop() {
@@ -148,7 +163,7 @@ public class AllInOneScript extends Script {
         log.info("[AIO] Script shutdown");
     }
 
-    /* ================== Loop ================== */
+    /* Loop */
 
     private void tickSafe() {
         try { tick(); } catch (Exception ex) {
@@ -158,10 +173,13 @@ public class AllInOneScript extends Script {
 
     private void tick() {
         if (!running || paused.get()) return;
+
         if (!Microbot.isLoggedIn()) {
             Microbot.status = "Waiting login...";
+            updateStatusAccessor();
             return;
         }
+
         long now = System.currentTimeMillis();
         if (now - lastSettingsRefresh >= SETTINGS_REFRESH_MS) {
             settingsRegistry.refresh();
@@ -169,16 +187,19 @@ public class AllInOneScript extends Script {
         }
 
         if (currentTask != null && currentTask.isComplete()) {
-            Microbot.log("Task completed: " + currentTask.getDisplay());
+            log.info("[AIO] Task complete: {}", currentTask.getDisplay());
             currentTask = null;
         }
+
         if (currentTask == null) {
-            currentTask = pollNextTask();
+            currentTask = queueManager.poll();
             if (currentTask != null) {
+                currentTask.markStarted();
                 Microbot.status = "Start: " + currentTask.getDisplay();
                 updateAntibanActivity(currentTask);
             } else {
                 Microbot.status = "Idle - no tasks";
+                updateStatusAccessor();
                 return;
             }
         }
@@ -188,14 +209,11 @@ public class AllInOneScript extends Script {
         } else if (currentTask instanceof AioQuestTask) {
             handleQuestTask((AioQuestTask) currentTask);
         }
+
+        updateStatusAccessor();
     }
 
-    private AioTask pollNextTask() {
-        if (taskQueue.isEmpty()) return null;
-        return taskQueue.remove(0);
-    }
-
-    /* ================== Handlers ================== */
+    /* Task handlers */
 
     private void handleSkillTask(AioSkillTask task) {
         SkillType st = task.getSkillType();
@@ -206,25 +224,24 @@ public class AllInOneScript extends Script {
         }
 
         SkillRuntimeSettings settings = settingsRegistry.get(st);
-        int effectiveTarget = task.getTargetLevel();
-        if (effectiveTarget <= 0 && settings != null) {
-            effectiveTarget = settings.getTargetLevel();
-        }
-        if (effectiveTarget <= 0) effectiveTarget = 99;
+        int target = task.getTargetLevel();
+        if (target <= 0 && settings != null) target = settings.getTargetLevel();
+        if (target <= 0) target = 99;
 
-        if (handler instanceof FishingSkillHandler) {
-            ((FishingSkillHandler) handler).applySettings(settings);
-        }
+        // XP tracking update
+        task.updateXpTracking();
+
+        handler.applySettings(settings);
 
         Skill apiSkill = task.toRuneLiteSkill();
-        int level = apiSkill != null ? Microbot.getClient().getRealSkillLevel(apiSkill) : 0;
+        int level = (Microbot.getClient() != null) ? Microbot.getClient().getRealSkillLevel(apiSkill) : 0;
 
-        if (level >= effectiveTarget) {
-            Microbot.status = "Target reached: " + st.getDisplayName() + " (" + level + ")";
+        if (level >= target) {
+            Microbot.status = "Target reached: " + st.name() + " (" + level + ")";
             task.markComplete();
             return;
         } else {
-            Microbot.status = "Training " + st.getDisplayName() + " (" + level + "/" + effectiveTarget + ")";
+            Microbot.status = "Training " + st.name() + " (" + level + "/" + target + ")";
         }
 
         handler.execute();
@@ -237,28 +254,20 @@ public class AllInOneScript extends Script {
             return;
         }
         handler.execute();
-        Microbot.status = "Quest placeholder: " + task.getQuestType().getDisplayName();
+        Microbot.status = "Quest placeholder: " + task.getQuestType().name();
         task.markComplete();
     }
 
     private void updateAntibanActivity(AioTask task) {
         if (task.getType() == AioTask.TaskType.SKILL) {
-            AioSkillTask sk = (AioSkillTask) task;
-            switch (sk.getSkillType()) {
-                case MINING:
-                    Rs2Antiban.setActivity(Activity.GENERAL_MINING); break;
-                case WOODCUTTING:
-                    Rs2Antiban.setActivity(Activity.GENERAL_WOODCUTTING); break;
-                case FISHING:
-                    Rs2Antiban.setActivity(Activity.GENERAL_FISHING); break;
-                case COOKING:
-                    Rs2Antiban.setActivity(Activity.GENERAL_COOKING); break;
-                case MAGIC:
-                case RANGED:
-                case ATTACK:
-                case STRENGTH:
-                case DEFENCE:
-                case HITPOINTS:
+            SkillType st = ((AioSkillTask) task).getSkillType();
+            switch (st) {
+                case MINING: Rs2Antiban.setActivity(Activity.GENERAL_MINING); break;
+                case WOODCUTTING: Rs2Antiban.setActivity(Activity.GENERAL_WOODCUTTING); break;
+                case FISHING: Rs2Antiban.setActivity(Activity.GENERAL_FISHING); break;
+                case COOKING: Rs2Antiban.setActivity(Activity.GENERAL_COOKING); break;
+                case MAGIC: case RANGED: case ATTACK: case STRENGTH:
+                case DEFENCE: case HITPOINTS:
                     Rs2Antiban.setActivity(Activity.GENERAL_COMBAT); break;
                 default:
                     Rs2Antiban.setActivity(Activity.GENERAL_COLLECTING);
@@ -268,7 +277,57 @@ public class AllInOneScript extends Script {
         }
     }
 
-    /* ================== Init ================== */
+    private void updateStatusAccessor() {
+        String name = currentTask == null ? "none" : currentTask.getDisplay();
+        int curLvl = 0;
+        int tgtLvl = 0;
+        long elapsed = 0;
+        int xpGained = 0;
+        double xpPerHour = 0;
+        int xpToTarget = -1;
+        double pctToTarget = 0;
+
+        if (currentTask instanceof AioSkillTask) {
+            AioSkillTask s = (AioSkillTask) currentTask;
+            curLvl = s.currentLevel();
+            int t = s.getTargetLevel();
+            SkillRuntimeSettings cfg = settingsRegistry.get(s.getSkillType());
+            if (t <= 0 && cfg != null) t = cfg.getTargetLevel();
+            if (t <= 0) t = 99;
+            tgtLvl = t;
+
+            int currentXp = s.currentXp();
+            xpGained = s.getXpGained();
+            int targetXp = XpUtil.xpForTarget(t);
+            xpToTarget = Math.max(0, targetXp - currentXp);
+            pctToTarget = XpUtil.percentToTarget(currentXp, t);
+
+            if (s.getStartTimestamp() > 0) {
+                elapsed = System.currentTimeMillis() - s.getStartTimestamp();
+                if (elapsed > 0 && xpGained > 0) {
+                    xpPerHour = xpGained * (3600000.0 / elapsed);
+                }
+            }
+        }
+
+        if (currentTask != null && currentTask.getStartTimestamp() > 0) {
+            elapsed = System.currentTimeMillis() - currentTask.getStartTimestamp();
+        }
+
+        statusAccessor.update(
+                name,
+                Microbot.status == null ? "" : Microbot.status,
+                curLvl,
+                tgtLvl,
+                elapsed,
+                xpGained,
+                xpPerHour,
+                xpToTarget,
+                pctToTarget
+        );
+    }
+
+    /* Init handlers */
 
     private void initSkillHandlers() {
         skillHandlers.put(SkillType.ATTACK, new AttackSkillHandler());
@@ -304,20 +363,18 @@ public class AllInOneScript extends Script {
         questHandlers.put(QuestType.SHEEP_SHEARER, new SheepShearerHandler());
     }
 
-    /* ================== Persist (JSON) ================== */
+    /* Persist */
 
     public void loadQueueFromConfig() {
         String raw = configManager.getConfiguration(configGroup, queueKey);
         if (raw == null || raw.isBlank()) return;
         try {
             List<AioTask> loaded = parseQueueJson(raw);
-            synchronized (this) {
-                taskQueue.clear();
-                taskQueue.addAll(loaded);
-            }
-            log.info("[AIO] Loaded queue ({} tasks)", loaded.size());
+            queueManager.clear();
+            for (AioTask t : loaded) queueManager.add(t);
+            log.info("[AIO] Loaded queue: {} tasks", loaded.size());
         } catch (Exception ex) {
-            log.warn("[AIO] Could not load queue", ex);
+            log.warn("[AIO] Failed load queue", ex);
         }
     }
 
@@ -327,7 +384,7 @@ public class AllInOneScript extends Script {
             configManager.setConfiguration(configGroup, queueKey, json);
             log.info("[AIO] Saved queue ({} chars)", json.length());
         } catch (Exception ex) {
-            log.warn("[AIO] Could not save queue", ex);
+            log.warn("[AIO] Failed save queue", ex);
         }
     }
 
@@ -349,20 +406,19 @@ public class AllInOneScript extends Script {
             }
             return list;
         }
-        // fallback simple
         String[] parts = raw.split(";");
         for (String p : parts) {
-            p = p.trim();
-            if (p.isEmpty()) continue;
-            if (p.startsWith("SKILL:")) {
-                String[] seg = p.split(":");
+            String s = p.trim();
+            if (s.isEmpty()) continue;
+            if (s.startsWith("SKILL:")) {
+                String[] seg = s.split(":");
                 if (seg.length >= 3) {
                     SkillType st = SkillType.valueOf(seg[1]);
                     int target = Integer.parseInt(seg[2]);
                     list.add(new AioSkillTask(st, 1, target));
                 }
-            } else if (p.startsWith("QUEST:")) {
-                String[] seg = p.split(":");
+            } else if (s.startsWith("QUEST:")) {
+                String[] seg = s.split(":");
                 if (seg.length >= 2) {
                     QuestType qt = QuestType.valueOf(seg[1]);
                     list.add(new AioQuestTask(qt));
@@ -375,45 +431,47 @@ public class AllInOneScript extends Script {
     private String buildQueueJson() {
         if (gson != null) {
             JsonArray arr = new JsonArray();
-            for (AioTask t : getSnapshotQueueWithCurrentFirst()) {
-                JsonObject o = new JsonObject();
-                o.addProperty("kind", t.getType().name());
-                if (t instanceof AioSkillTask) {
-                    AioSkillTask s = (AioSkillTask) t;
-                    o.addProperty("id", s.getSkillType().name());
-                    o.addProperty("target", s.getTargetLevel());
-                } else if (t instanceof AioQuestTask) {
-                    AioQuestTask q = (AioQuestTask) t;
-                    o.addProperty("id", q.getQuestType().name());
-                }
-                arr.add(o);
+            if (currentTask != null && !currentTask.isComplete()) {
+                arr.add(toJsonObj(currentTask));
+            }
+            for (AioTask t : queueManager.snapshot()) {
+                arr.add(toJsonObj(t));
             }
             return gson.toJson(arr);
         }
         StringBuilder sb = new StringBuilder();
-        for (AioTask t : getSnapshotQueueWithCurrentFirst()) {
-            if (t instanceof AioSkillTask) {
-                AioSkillTask s = (AioSkillTask) t;
-                sb.append("SKILL:").append(s.getSkillType().name()).append(":").append(s.getTargetLevel());
-            } else if (t instanceof AioQuestTask) {
-                AioQuestTask q = (AioQuestTask) t;
-                sb.append("QUEST:").append(q.getQuestType().name());
-            }
-            sb.append(";");
+        if (currentTask != null && !currentTask.isComplete()) {
+            appendLegacy(sb, currentTask);
+        }
+        for (AioTask t : queueManager.snapshot()) {
+            appendLegacy(sb, t);
         }
         return sb.toString();
     }
 
-    private List<AioTask> getSnapshotQueueWithCurrentFirst() {
-        List<AioTask> snapshot = new ArrayList<>();
-        if (currentTask != null && !currentTask.isComplete()) {
-            snapshot.add(currentTask);
+    private JsonObject toJsonObj(AioTask t) {
+        JsonObject o = new JsonObject();
+        o.addProperty("kind", t.getType().name());
+        if (t instanceof AioSkillTask) {
+            AioSkillTask s = (AioSkillTask) t;
+            o.addProperty("id", s.getSkillType().name());
+            o.addProperty("target", s.getTargetLevel());
+        } else if (t instanceof AioQuestTask) {
+            AioQuestTask q = (AioQuestTask) t;
+            o.addProperty("id", q.getQuestType().name());
         }
-        snapshot.addAll(getSnapshotQueue());
-        return snapshot;
+        return o;
     }
 
-    /* ================== Helpers ================== */
+    private void appendLegacy(StringBuilder sb, AioTask t) {
+        if (t instanceof AioSkillTask) {
+            AioSkillTask s = (AioSkillTask) t;
+            sb.append("SKILL:").append(s.getSkillType().name()).append(":").append(s.getTargetLevel()).append(";");
+        } else if (t instanceof AioQuestTask) {
+            AioQuestTask q = (AioQuestTask) t;
+            sb.append("QUEST:").append(q.getQuestType().name()).append(";");
+        }
+    }
 
     private Skill mapToApi(SkillType st) {
         switch (st) {

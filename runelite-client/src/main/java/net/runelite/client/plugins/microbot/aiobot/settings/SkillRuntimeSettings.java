@@ -2,18 +2,31 @@ package net.runelite.client.plugins.microbot.aiobot.settings;
 
 import lombok.Builder;
 import lombok.Value;
-import net.runelite.client.plugins.microbot.aiobot.enums.SkillType;
 
+import java.util.Collections;
 import java.util.Set;
 
+/**
+ * Immutable snapshot van configuratie voor een skill.
+ * Handlers mogen velden negeren die niet relevant zijn.
+ */
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class SkillRuntimeSettings {
-    SkillType skillType;
+    net.runelite.client.plugins.microbot.aiobot.enums.SkillType skillType;
+
     boolean enabled;
-    int targetLevel;          // fallback target
-    String mode;              // generic mode string (skill-specifiek interpreteren)
-    Set<String> customList;   // drop list / filter / selection
-    boolean useSpecial;       // bijv. spec harpoon / infernal axe / etc.
-    boolean hopIfNoResource;  // bijv. fishing hop, mining hop
+    int targetLevel;
+
+    String mode;              // bijv. POWERFISH / BANK / POWERDROP etc.
+    boolean useSpecial;
+    boolean hopIfNoResource;
+
+    // Generieke string-lijsten (drop list, custom rocks, etc.)
+    @Builder.Default
+    Set<String> customList = Collections.emptySet();
+
+    // Placeholder voor toekomstige uitbreidingen (potionMode, prayerMode, flags, useStamina...)
+    @Builder.Default
+    Set<String> flags = Collections.emptySet();
 }
