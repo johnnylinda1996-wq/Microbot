@@ -39,7 +39,7 @@ public class CookingSkillHandler implements SkillHandler {
 
     /* ============== RUNTIME VARS ============== */
     private boolean enabled = true;
-    private String mode = "range";
+    private String mode = "range"; // wordt overschreven door applySettings()
     private boolean dropBurnt = true;
 
     private CookingItem activeItem;
@@ -90,8 +90,17 @@ public class CookingSkillHandler implements SkillHandler {
     public void applySettings(SkillRuntimeSettings settings) {
         if (settings == null) return;
         enabled = settings.isEnabled();
-        if (settings.getMode() != null) mode = settings.getMode().toLowerCase(Locale.ROOT);
-        // Voeg hier eventueel dropBurnt koppeling toe
+
+        // Koppel cooking mode uit de config
+        if (settings.getMode() != null) {
+            mode = settings.getMode().toLowerCase(Locale.ROOT);
+        }
+
+        // Koppel cooking gauntlets flag
+        if (settings.getFlags().contains("COOKING_GAUNTLETS")) {
+            // Dit zou gebruikt kunnen worden voor logic om gauntlets aan te trekken
+            // Voor nu loggen we het alleen
+        }
     }
 
     /* ============== MAIN LOOP ============== */
@@ -120,6 +129,17 @@ public class CookingSkillHandler implements SkillHandler {
     /* ============== STATE HANDLERS ============== */
 
     private void handleFetching() {
+        // Deposit cooked fish if present before withdrawing new raw fish
+        if (activeItem != null && Rs2Inventory.hasItem(activeItem.getCookedItemName())) {
+            if (!openNearestBank()) {
+                Microbot.status = "Cooking: open bank to deposit cooked fish...";
+                return;
+            }
+            Rs2Bank.depositAll(activeItem.getCookedItemName());
+            Microbot.status = "Cooking: deposited cooked fish";
+            Rs2Bank.closeBank();
+        }
+
         if (activeItem == null) {
             // Geen huidig item: probeer direct bank + selectie
             if (!openNearestBank()) {
@@ -297,15 +317,12 @@ public class CookingSkillHandler implements SkillHandler {
                         Rs2Inventory.hasItem(ci.getRawItemName()) ||
                                 Rs2Bank.hasItem(ci.getRawItemName()) // bank is open hier
                 )
-                .sorted(Comparator.comparingInt(this::levelReq).reversed())
-                .findFirst()
+                .max(Comparator.comparingInt(this::levelReq))
                 .orElse(null);
 
+        activeItem = best;
         if (best != null) {
-            activeItem = best;
             Microbot.status = "Cooking: select " + best.getRawItemName();
-        } else {
-            activeItem = null;
         }
     }
 

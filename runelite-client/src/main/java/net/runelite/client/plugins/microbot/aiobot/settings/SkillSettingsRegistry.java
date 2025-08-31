@@ -119,6 +119,10 @@ public class SkillSettingsRegistry {
                 .flags(wcFlags)
                 .build());
 
+        Set<String> fishingFlags = new HashSet<>();
+        if (bool(() -> config.fishingHopIfNoSpot())) fishingFlags.add("HOP_IF_NO_SPOT");
+        fishingFlags.add("FISHING_METHOD:" + config.fishingMethod().name());
+
         map.put(SkillType.FISHING, SkillRuntimeSettings.builder()
                 .skillType(SkillType.FISHING)
                 .enabled(true)
@@ -127,6 +131,7 @@ public class SkillSettingsRegistry {
                 .useSpecial(bool(() -> config.fishingUseSpecHarpoon()))
                 .customList(parseCsv(str(() -> config.fishingCustomDropList())))
                 .hopIfNoResource(bool(() -> config.fishingHopIfNoSpot()))
+                .flags(fishingFlags)
                 .build());
 
         map.put(SkillType.HUNTER, SkillRuntimeSettings.builder()
@@ -186,7 +191,7 @@ public class SkillSettingsRegistry {
                 .build());
 
         Set<String> fmFlags = new HashSet<>();
-        if (bool(() -> config.fmUseStaminas())) fmFlags.add("USE_STAMINA");
+        fmFlags.add("FM_MODE:" + enumName(() -> config.fmMode()));
         map.put(SkillType.FIREMAKING, SkillRuntimeSettings.builder()
                 .skillType(SkillType.FIREMAKING)
                 .enabled(true)

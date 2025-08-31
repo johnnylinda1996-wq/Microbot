@@ -248,17 +248,15 @@ public interface AllInOneConfig extends Config {
     )
     String fishingSection = "fishingSection";
 
-    @ConfigItem(keyName = "fishingMode", name = "Mode", description = "POWERFISH / BANK / COOK_DROP", section = fishingSection, position = 0)
+    @ConfigItem(keyName = "fishingMode", name = "Mode", description = "POWERFISH / BANK", section = fishingSection, position = 0)
     default FishingMode fishingMode() { return FishingMode.POWERFISH; }
 
-    @ConfigItem(keyName = "fishingUseSpecHarpoon", name = "Use Spec Harpoon", description = "Harpoon special gebruiken", section = fishingSection, position = 1)
+    @ConfigItem(keyName = "fishingMethod", name = "Fishing Method", description = "Choose specific fishing method or Auto for level-based progression", section = fishingSection, position = 1)
+    default FishingMethod fishingMethod() { return FishingMethod.AUTO; }
+
+    @ConfigItem(keyName = "fishingUseSpecHarpoon", name = "Use Spec Harpoon", description = "Harpoon special gebruiken", section = fishingSection, position = 2)
     default boolean fishingUseSpecHarpoon() { return true; }
 
-    @ConfigItem(keyName = "fishingCustomDropList", name = "Custom Drop", description = "Comma (override low tier)", section = fishingSection, position = 2)
-    default String fishingCustomDropList() { return ""; }
-
-    @ConfigItem(keyName = "fishingHopIfNoSpot", name = "Hop if no spot", description = "Wereld hop (future)", section = fishingSection, position = 3)
-    default boolean fishingHopIfNoSpot() { return false; }
 
     @ConfigSection(
             name = "Hunter",
@@ -365,11 +363,8 @@ public interface AllInOneConfig extends Config {
     )
     String firemakingSection = "firemakingSection";
 
-    @ConfigItem(keyName = "fmMode", name = "Mode", description = "Line / Wintertodt (future) / Pyromania", section = firemakingSection, position = 0)
-    default FiremakingMode fmMode() { return FiremakingMode.LINE; }
-
-    @ConfigItem(keyName = "fmUseStaminas", name = "Use Stamina", description = "Stamina potions gebruiken", section = firemakingSection, position = 1)
-    default boolean fmUseStaminas() { return false; }
+    @ConfigItem(keyName = "fmMode", name = "Mode", description = "Choose mode for firemaking training", section = firemakingSection, position = 0)
+    default FiremakingLogType fmMode() { return FiremakingLogType.AUTO; }
 
     @ConfigSection(
             name = "Herblore",
@@ -478,7 +473,8 @@ public interface AllInOneConfig extends Config {
     // Gathering
     enum MiningMode { POWERDROP, BANK }
     enum WoodcuttingMode { POWERDROP, BANK, NEST_FOCUS }
-    enum FishingMode { POWERFISH, BANK, COOK_DROP }
+    enum FishingMode { POWERFISH, BANK }
+    enum FishingMethod { AUTO, NET, BAIT, LURE, CAGE, HARPOON }
     enum HunterMethod { AUTO, BIRDS, CHINCHOMPA, SALAMANDER, HERBIBOAR }
     enum FarmingRunMode { HERB_ONLY, TREE_ONLY, FRUIT_ONLY, HERB_TREE, FULL_RUN }
     enum CompostMode { NONE, COMPOST, SUPER, ULTRA }
@@ -487,9 +483,9 @@ public interface AllInOneConfig extends Config {
     enum SmithingMode { ANVIL, BLAST_FURNACE, CANNONBALLS }
     enum FletchingMode { SHAFTS, SHORTBOW, LONGBOW, DARTS, BOLTS }
     enum BankMode { BANK, SELL_GE }
-    enum CraftingMethod { GEMS, BATTLESTAFFS, GLASS, DHIDE, JEWELLERY }
+    enum CraftingMethod { GEMS, GLASSES, BATTLESTAFF, POTTERY }
     enum CookingMode { FIRE, RANGE, HOSIDIUS }
-    enum FiremakingMode { LINE, WINTERTODT, OTHER }
+    enum FiremakingLogType { AUTO, CAMPFIRE, REGULAR, NORMAL, OAK, WILLOW, MAPLE, YEW, MAGIC, TEAK, MAHOGANY, REDWOOD }
     enum HerbloreMode { CLEAN, UNFINISHED, MIX, TAR }
     enum RunecraftMethod { ABYSS, ALTAR_DIRECT, LAVA, GOTR, ZMI }
     enum ConstructionMethod { OAK_LARDER, OAK_DOOR, MAHOGANY_TABLE, GUILD_BENCH }
