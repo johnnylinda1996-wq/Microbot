@@ -1,5 +1,8 @@
 package net.runelite.client.plugins.microbot.aiobot.skills.woodcutting;
 
+/**
+ * States for woodcutting operations
+ */
 public enum WoodcuttingState {
     IDLE,
     PREPARE,

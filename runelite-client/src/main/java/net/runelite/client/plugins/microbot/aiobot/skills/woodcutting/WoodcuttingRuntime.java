@@ -1,29 +1,39 @@
 package net.runelite.client.plugins.microbot.aiobot.skills.woodcutting;
 
-import lombok.Getter;
-import lombok.Setter;
 import net.runelite.api.coords.WorldPoint;
 
-@Getter
-@Setter
+/**
+ * Runtime state tracking for woodcutting operations
+ */
 public class WoodcuttingRuntime {
     private WoodcuttingState state = WoodcuttingState.IDLE;
     private long lastActionTs = 0L;
-    private long lastXpTs = 0L;
     private int startXp = -1;
-    private int logsCut = 0;
-    private int lastInventoryCount = 0;
     private WorldPoint startPoint;
-    private int stuckTicks = 0;
+    private long sessionStartTime = System.currentTimeMillis();
+
+    // Getters and setters
+    public WoodcuttingState getState() { return state; }
+    public void setState(WoodcuttingState state) { this.state = state; }
+
+    public long getLastActionTs() { return lastActionTs; }
+    public void setLastActionTs(long lastActionTs) { this.lastActionTs = lastActionTs; }
+
+    public int getStartXp() { return startXp; }
+    public void setStartXp(int startXp) { this.startXp = startXp; }
+
+    public WorldPoint getStartPoint() { return startPoint; }
+    public void setStartPoint(WorldPoint startPoint) { this.startPoint = startPoint; }
+
+    public long getSessionStartTime() { return sessionStartTime; }
+
+    public long getSessionDuration() {
+        return System.currentTimeMillis() - sessionStartTime;
+    }
 
     public void reset() {
         state = WoodcuttingState.IDLE;
-        lastActionTs = System.currentTimeMillis();
-        lastXpTs = System.currentTimeMillis();
-        startXp = -1;
-        logsCut = 0;
-        lastInventoryCount = 0;
-        stuckTicks = 0;
-        startPoint = null;
+        lastActionTs = 0L;
+        sessionStartTime = System.currentTimeMillis();
     }
 }

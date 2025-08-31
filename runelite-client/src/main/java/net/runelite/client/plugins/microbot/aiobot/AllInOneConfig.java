@@ -3,15 +3,19 @@ package net.runelite.client.plugins.microbot.aiobot;
 import net.runelite.client.config.*;
 
 /**
- * All-In-One configuration:
- * - General section
- * - Per-skill collapsible sections (voor nu alle 23 OSRS skills)
- * - Plaats-houders voor toekomstige opties (kun je later invullen in handlers)
+ * All-In-One configuration (gereduceerd):
+ *
+ * Verwijderd:
+ *  - Alle *Enabled opties (worden nu via GUI / queue beslist)
+ *  - Alle *TargetLevel opties (target levels worden nu per taak in de GUI gezet)
+ *
+ * Overgebleven:
+ *  - Alleen settings die daadwerkelijk runtime gedrag beïnvloeden (styles, modes, toggles)
+ *  - Algemene settings (antiban, debug, autostart)
  *
  * Let op:
- * - Veel opties zijn (nog) niet geïmplementeerd in de handlers; ze staan hier alvast klaar.
- * - Modes / enums kun je uitbreiden of samenvoegen indien nodig.
- * - targetLevel = fallback als een queue skill-task geen target meegeeft.
+ *  - Alle code die nog refereert aan bijv. config.attackEnabled() of config.attackTargetLevel()
+ *    moet worden aangepast om de GUI/queue bron te gebruiken.
  */
 @ConfigGroup("allInOneAio")
 public interface AllInOneConfig extends Config {
@@ -54,7 +58,7 @@ public interface AllInOneConfig extends Config {
 
     @ConfigItem(
             keyName = "queuePersistence",
-            name = "Queue JSON (Niet aanpassen)",
+            name = "Queue JSON (Intern)",
             description = "Intern veld voor queue persistentie",
             section = generalSection,
             position = 3,
@@ -64,6 +68,7 @@ public interface AllInOneConfig extends Config {
 
     /* =====================================================
        COMBAT SKILLS (Attack / Strength / Defence / Ranged / Magic / Prayer / Hitpoints)
+       Verwijderd: enabled + targetLevel config items
        ===================================================== */
 
     @ConfigSection(
@@ -74,26 +79,19 @@ public interface AllInOneConfig extends Config {
     )
     String attackSection = "attackSection";
 
-    @ConfigItem(keyName = "attackEnabled", name = "Enable Attack", description = "Sta Attack training toe", section = attackSection, position = 0)
-    default boolean attackEnabled() { return true; }
-
-    @ConfigItem(keyName = "attackTargetLevel", name = "Target Level", description = "Fallback attack niveau", section = attackSection, position = 1)
-    default int attackTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "attackStyle", name = "Style", description = "Training stijl", section = attackSection, position = 2)
+    @ConfigItem(keyName = "attackStyle", name = "Style", description = "Training stijl", section = attackSection, position = 0)
     default CombatStyle attackStyle() { return CombatStyle.ACCURATE; }
 
-    @ConfigItem(keyName = "attackFoodBelow", name = "Eet onder HP", description = "Eet voedsel onder dit HP %", section = attackSection, position = 3)
+    @ConfigItem(keyName = "attackFoodBelow", name = "Eet onder HP%", description = "Eet voedsel onder dit HP %", section = attackSection, position = 1)
     default int attackFoodBelow() { return 40; }
 
-    @ConfigItem(keyName = "attackUseSpec", name = "Gebruik Special", description = "Gebruik spec bij beschikbaarheid", section = attackSection, position = 4)
+    @ConfigItem(keyName = "attackUseSpec", name = "Gebruik Special", description = "Gebruik spec bij beschikbaarheid", section = attackSection, position = 2)
     default boolean attackUseSpec() { return true; }
 
-    @ConfigItem(keyName = "attackPotionMode", name = "Potion Mode", description = "Gebruik combat potions", section = attackSection, position = 5)
+    @ConfigItem(keyName = "attackPotionMode", name = "Potion Mode", description = "Gebruik combat potions", section = attackSection, position = 3)
     default PotionMode attackPotionMode() { return PotionMode.NONE; }
 
     /* Strength */
-
     @ConfigSection(
             name = "Strength",
             description = "Strength instellingen",
@@ -102,26 +100,19 @@ public interface AllInOneConfig extends Config {
     )
     String strengthSection = "strengthSection";
 
-    @ConfigItem(keyName = "strengthEnabled", name = "Enable Strength", description = "Sta Strength training toe", section = strengthSection, position = 0)
-    default boolean strengthEnabled() { return true; }
-
-    @ConfigItem(keyName = "strengthTargetLevel", name = "Target Level", description = "Fallback strength niveau", section = strengthSection, position = 1)
-    default int strengthTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "strengthStyle", name = "Style", description = "Training stijl", section = strengthSection, position = 2)
+    @ConfigItem(keyName = "strengthStyle", name = "Style", description = "Training stijl", section = strengthSection, position = 0)
     default CombatStyle strengthStyle() { return CombatStyle.AGGRESSIVE; }
 
-    @ConfigItem(keyName = "strengthFoodBelow", name = "Eet onder HP", description = "Eet voedsel onder dit HP %", section = strengthSection, position = 3)
+    @ConfigItem(keyName = "strengthFoodBelow", name = "Eet onder HP%", description = "HP threshold", section = strengthSection, position = 1)
     default int strengthFoodBelow() { return 40; }
 
-    @ConfigItem(keyName = "strengthUseSpec", name = "Gebruik Special", description = "Gebruik spec", section = strengthSection, position = 4)
+    @ConfigItem(keyName = "strengthUseSpec", name = "Gebruik Special", description = "Gebruik spec", section = strengthSection, position = 2)
     default boolean strengthUseSpec() { return true; }
 
-    @ConfigItem(keyName = "strengthPotionMode", name = "Potion Mode", description = "Gebruik potions", section = strengthSection, position = 5)
+    @ConfigItem(keyName = "strengthPotionMode", name = "Potion Mode", description = "Gebruik potions", section = strengthSection, position = 3)
     default PotionMode strengthPotionMode() { return PotionMode.NONE; }
 
     /* Defence */
-
     @ConfigSection(
             name = "Defence",
             description = "Defence instellingen",
@@ -130,26 +121,19 @@ public interface AllInOneConfig extends Config {
     )
     String defenceSection = "defenceSection";
 
-    @ConfigItem(keyName = "defenceEnabled", name = "Enable Defence", description = "Sta Defence training toe", section = defenceSection, position = 0)
-    default boolean defenceEnabled() { return true; }
-
-    @ConfigItem(keyName = "defenceTargetLevel", name = "Target Level", description = "Fallback defence niveau", section = defenceSection, position = 1)
-    default int defenceTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "defenceStyle", name = "Style", description = "Training stijl", section = defenceSection, position = 2)
+    @ConfigItem(keyName = "defenceStyle", name = "Style", description = "Training stijl", section = defenceSection, position = 0)
     default CombatStyle defenceStyle() { return CombatStyle.DEFENSIVE; }
 
-    @ConfigItem(keyName = "defenceFoodBelow", name = "Eet onder HP", description = "HP% eten", section = defenceSection, position = 3)
+    @ConfigItem(keyName = "defenceFoodBelow", name = "Eet onder HP%", description = "HP% eten", section = defenceSection, position = 1)
     default int defenceFoodBelow() { return 40; }
 
-    @ConfigItem(keyName = "defenceUseSpec", name = "Gebruik Special", description = "Spec gebruiken", section = defenceSection, position = 4)
+    @ConfigItem(keyName = "defenceUseSpec", name = "Gebruik Special", description = "Spec gebruiken", section = defenceSection, position = 2)
     default boolean defenceUseSpec() { return false; }
 
-    @ConfigItem(keyName = "defencePotionMode", name = "Potion Mode", description = "Gebruik potions", section = defenceSection, position = 5)
+    @ConfigItem(keyName = "defencePotionMode", name = "Potion Mode", description = "Gebruik potions", section = defenceSection, position = 3)
     default PotionMode defencePotionMode() { return PotionMode.NONE; }
 
     /* Ranged */
-
     @ConfigSection(
             name = "Ranged",
             description = "Ranged instellingen",
@@ -158,26 +142,19 @@ public interface AllInOneConfig extends Config {
     )
     String rangedSection = "rangedSection";
 
-    @ConfigItem(keyName = "rangedEnabled", name = "Enable Ranged", description = "Sta Ranged training toe", section = rangedSection, position = 0)
-    default boolean rangedEnabled() { return true; }
-
-    @ConfigItem(keyName = "rangedTargetLevel", name = "Target Level", description = "Fallback ranged niveau", section = rangedSection, position = 1)
-    default int rangedTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "rangedAmmoType", name = "Ammo Type", description = "Type munitie (placeholder)", section = rangedSection, position = 2)
+    @ConfigItem(keyName = "rangedAmmoType", name = "Ammo Type", description = "Type munitie (placeholder)", section = rangedSection, position = 0)
     default String rangedAmmoType() { return ""; }
 
-    @ConfigItem(keyName = "rangedPrayerMode", name = "Prayer Mode", description = "Bescherm / DPS prayer", section = rangedSection, position = 3)
+    @ConfigItem(keyName = "rangedPrayerMode", name = "Prayer Mode", description = "Bescherm / DPS prayer", section = rangedSection, position = 1)
     default PrayerSupportMode rangedPrayerMode() { return PrayerSupportMode.NONE; }
 
-    @ConfigItem(keyName = "rangedUseSpec", name = "Gebruik Special", description = "Spec gebruiken (D Bow / ACB etc.)", section = rangedSection, position = 4)
+    @ConfigItem(keyName = "rangedUseSpec", name = "Gebruik Special", description = "Spec gebruiken (D Bow / ACB etc.)", section = rangedSection, position = 2)
     default boolean rangedUseSpec() { return false; }
 
-    @ConfigItem(keyName = "rangedFoodBelow", name = "Eet onder HP", description = "HP% eten", section = rangedSection, position = 5)
+    @ConfigItem(keyName = "rangedFoodBelow", name = "Eet onder HP%", description = "HP% eten", section = rangedSection, position = 3)
     default int rangedFoodBelow() { return 50; }
 
     /* Magic */
-
     @ConfigSection(
             name = "Magic",
             description = "Magic instellingen",
@@ -186,23 +163,16 @@ public interface AllInOneConfig extends Config {
     )
     String magicSection = "magicSection";
 
-    @ConfigItem(keyName = "magicEnabled", name = "Enable Magic", description = "Sta Magic training toe", section = magicSection, position = 0)
-    default boolean magicEnabled() { return true; }
-
-    @ConfigItem(keyName = "magicTargetLevel", name = "Target Level", description = "Fallback magic niveau", section = magicSection, position = 1)
-    default int magicTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "magicTrainingMode", name = "Training Mode", description = "Spell/strategie", section = magicSection, position = 2)
+    @ConfigItem(keyName = "magicTrainingMode", name = "Training Mode", description = "Spell/strategie", section = magicSection, position = 0)
     default MagicTrainingMode magicTrainingMode() { return MagicTrainingMode.HIGH_ALCH; }
 
-    @ConfigItem(keyName = "magicEnableSplashFailsafe", name = "Splash Failsafe", description = "Herstart bij geen XP tick", section = magicSection, position = 3)
+    @ConfigItem(keyName = "magicEnableSplashFailsafe", name = "Splash Failsafe", description = "Herstart bij geen XP tick", section = magicSection, position = 1)
     default boolean magicEnableSplashFailsafe() { return true; }
 
-    @ConfigItem(keyName = "magicUseStamina", name = "Use Stamina", description = "Gebruik stamina potions", section = magicSection, position = 4)
+    @ConfigItem(keyName = "magicUseStamina", name = "Use Stamina", description = "Gebruik stamina potions", section = magicSection, position = 2)
     default boolean magicUseStamina() { return false; }
 
     /* Prayer */
-
     @ConfigSection(
             name = "Prayer",
             description = "Prayer instellingen",
@@ -211,20 +181,13 @@ public interface AllInOneConfig extends Config {
     )
     String prayerSection = "prayerSection";
 
-    @ConfigItem(keyName = "prayerEnabled", name = "Enable Prayer", description = "Sta Prayer training toe", section = prayerSection, position = 0)
-    default boolean prayerEnabled() { return true; }
-
-    @ConfigItem(keyName = "prayerTargetLevel", name = "Target Level", description = "Fallback prayer", section = prayerSection, position = 1)
-    default int prayerTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "prayerTrainingMode", name = "Mode", description = "Beenderen / Gilded / Ectofuntus (placeholder)", section = prayerSection, position = 2)
+    @ConfigItem(keyName = "prayerTrainingMode", name = "Mode", description = "Beenderen / Gilded / Ectofuntus (placeholder)", section = prayerSection, position = 0)
     default PrayerTrainingMode prayerTrainingMode() { return PrayerTrainingMode.BONES_ALTAR; }
 
-    @ConfigItem(keyName = "prayerUseIncense", name = "Use Incense (future)", description = "Toekomstige buff support", section = prayerSection, position = 3)
+    @ConfigItem(keyName = "prayerUseIncense", name = "Use Incense (future)", description = "Toekomstige buff support", section = prayerSection, position = 1)
     default boolean prayerUseIncense() { return false; }
 
-    /* Hitpoints (meestal passief, maar voor future content) */
-
+    /* Hitpoints (passief) */
     @ConfigSection(
             name = "Hitpoints",
             description = "Hitpoints instellingen",
@@ -233,13 +196,7 @@ public interface AllInOneConfig extends Config {
     )
     String hpSection = "hpSection";
 
-    @ConfigItem(keyName = "hitpointsEnabled", name = "Enable Hitpoints", description = "Expliciet HP training (bijv. Nightmare Zone)", section = hpSection, position = 0)
-    default boolean hitpointsEnabled() { return false; }
-
-    @ConfigItem(keyName = "hitpointsTargetLevel", name = "Target Level", description = "Fallback HP", section = hpSection, position = 1)
-    default int hitpointsTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "hitpointsMethod", name = "Method (placeholder)", description = "NMZ / Sandcrabs etc", section = hpSection, position = 2)
+    @ConfigItem(keyName = "hitpointsMethod", name = "Method (placeholder)", description = "NMZ / Sandcrabs etc", section = hpSection, position = 0)
     default String hitpointsMethod() { return ""; }
 
     /* =====================================================
@@ -254,22 +211,16 @@ public interface AllInOneConfig extends Config {
     )
     String miningSection = "miningSection";
 
-    @ConfigItem(keyName = "miningEnabled", name = "Enable Mining", description = "Sta Mining toe", section = miningSection, position = 0)
-    default boolean miningEnabled() { return true; }
-
-    @ConfigItem(keyName = "miningTargetLevel", name = "Target Level", description = "Fallback mining", section = miningSection, position = 1)
-    default int miningTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "miningMode", name = "Mode", description = "Powerdrop / Bank", section = miningSection, position = 2)
+    @ConfigItem(keyName = "miningMode", name = "Mode", description = "Powerdrop / Bank", section = miningSection, position = 0)
     default MiningMode miningMode() { return MiningMode.POWERDROP; }
 
-    @ConfigItem(keyName = "miningCustomRocks", name = "Allowed Rocks", description = "comma (iron,coal,gold)", section = miningSection, position = 3)
+    @ConfigItem(keyName = "miningCustomRocks", name = "Allowed Rocks", description = "comma (iron,coal,gold)", section = miningSection, position = 1)
     default String miningCustomRocks() { return ""; }
 
-    @ConfigItem(keyName = "miningUse3Tick", name = "Enable 3-tick", description = "Toekomstige geavanceerde methode", section = miningSection, position = 4)
+    @ConfigItem(keyName = "miningUse3Tick", name = "Enable 3-tick", description = "Toekomstige geavanceerde methode", section = miningSection, position = 2)
     default boolean miningUse3Tick() { return false; }
 
-    @ConfigItem(keyName = "miningHopIfNoRock", name = "Hop if no rock", description = "Wereld hop (future)", section = miningSection, position = 5)
+    @ConfigItem(keyName = "miningHopIfNoRock", name = "Hop if no rock", description = "Wereld hop (future)", section = miningSection, position = 3)
     default boolean miningHopIfNoRock() { return false; }
 
     @ConfigSection(
@@ -280,19 +231,13 @@ public interface AllInOneConfig extends Config {
     )
     String woodcuttingSection = "woodcuttingSection";
 
-    @ConfigItem(keyName = "wcEnabled", name = "Enable Woodcutting", description = "Sta WC toe", section = woodcuttingSection, position = 0)
-    default boolean wcEnabled() { return true; }
-
-    @ConfigItem(keyName = "wcTargetLevel", name = "Target Level", description = "Fallback wc", section = woodcuttingSection, position = 1)
-    default int wcTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "wcMode", name = "Mode", description = "Powerdrop / Bank / Bird nest focus", section = woodcuttingSection, position = 2)
+    @ConfigItem(keyName = "wcMode", name = "Mode", description = "Powerdrop / Bank / Bird nest focus", section = woodcuttingSection, position = 0)
     default WoodcuttingMode wcMode() { return WoodcuttingMode.POWERDROP; }
 
-    @ConfigItem(keyName = "wcBirdNestPickup", name = "Pickup Nests", description = "Pak bird nests op", section = woodcuttingSection, position = 3)
+    @ConfigItem(keyName = "wcBirdNestPickup", name = "Pickup Nests", description = "Pak bird nests op", section = woodcuttingSection, position = 1)
     default boolean wcBirdNestPickup() { return true; }
 
-    @ConfigItem(keyName = "wcUseSpec", name = "Dragon Axe Spec", description = "Gebruik spec bij 100%", section = woodcuttingSection, position = 4)
+    @ConfigItem(keyName = "wcUseSpec", name = "Dragon Axe Spec", description = "Gebruik spec bij 100%", section = woodcuttingSection, position = 2)
     default boolean wcUseSpec() { return true; }
 
     @ConfigSection(
@@ -303,22 +248,16 @@ public interface AllInOneConfig extends Config {
     )
     String fishingSection = "fishingSection";
 
-    @ConfigItem(keyName = "fishingEnabled", name = "Enable Fishing", description = "Sta Fishing toe", section = fishingSection, position = 0)
-    default boolean fishingEnabled() { return true; }
-
-    @ConfigItem(keyName = "fishingTargetLevel", name = "Target Level", description = "Fallback fishing", section = fishingSection, position = 1)
-    default int fishingTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "fishingMode", name = "Mode", description = "POWERFISH / BANK / COOK_DROP", section = fishingSection, position = 2)
+    @ConfigItem(keyName = "fishingMode", name = "Mode", description = "POWERFISH / BANK / COOK_DROP", section = fishingSection, position = 0)
     default FishingMode fishingMode() { return FishingMode.POWERFISH; }
 
-    @ConfigItem(keyName = "fishingUseSpecHarpoon", name = "Use Spec Harpoon", description = "Harpoon special gebruiken", section = fishingSection, position = 3)
+    @ConfigItem(keyName = "fishingUseSpecHarpoon", name = "Use Spec Harpoon", description = "Harpoon special gebruiken", section = fishingSection, position = 1)
     default boolean fishingUseSpecHarpoon() { return true; }
 
-    @ConfigItem(keyName = "fishingCustomDropList", name = "Custom Drop", description = "Comma (override low tier)", section = fishingSection, position = 4)
+    @ConfigItem(keyName = "fishingCustomDropList", name = "Custom Drop", description = "Comma (override low tier)", section = fishingSection, position = 2)
     default String fishingCustomDropList() { return ""; }
 
-    @ConfigItem(keyName = "fishingHopIfNoSpot", name = "Hop if no spot", description = "Wereld hop (future)", section = fishingSection, position = 5)
+    @ConfigItem(keyName = "fishingHopIfNoSpot", name = "Hop if no spot", description = "Wereld hop (future)", section = fishingSection, position = 3)
     default boolean fishingHopIfNoSpot() { return false; }
 
     @ConfigSection(
@@ -329,19 +268,13 @@ public interface AllInOneConfig extends Config {
     )
     String hunterSection = "hunterSection";
 
-    @ConfigItem(keyName = "hunterEnabled", name = "Enable Hunter", description = "Sta Hunter toe", section = hunterSection, position = 0)
-    default boolean hunterEnabled() { return true; }
-
-    @ConfigItem(keyName = "hunterTargetLevel", name = "Target Level", description = "Fallback hunter", section = hunterSection, position = 1)
-    default int hunterTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "hunterMethod", name = "Method", description = "Auto / Chinchompa / Bird snare etc.", section = hunterSection, position = 2)
+    @ConfigItem(keyName = "hunterMethod", name = "Method", description = "Auto / Chinchompa / Bird snare etc.", section = hunterSection, position = 0)
     default HunterMethod hunterMethod() { return HunterMethod.AUTO; }
 
-    @ConfigItem(keyName = "hunterTrapCount", name = "Trap Count override", description = "0 = auto by level", section = hunterSection, position = 3)
+    @ConfigItem(keyName = "hunterTrapCount", name = "Trap Count override", description = "0 = auto by level", section = hunterSection, position = 1)
     default int hunterTrapCount() { return 0; }
 
-    @ConfigItem(keyName = "hunterAutoRelay", name = "Auto Relay", description = "Replant traps bij fail", section = hunterSection, position = 4)
+    @ConfigItem(keyName = "hunterAutoRelay", name = "Auto Relay", description = "Replant traps bij fail", section = hunterSection, position = 2)
     default boolean hunterAutoRelay() { return true; }
 
     @ConfigSection(
@@ -352,23 +285,17 @@ public interface AllInOneConfig extends Config {
     )
     String farmingSection = "farmingSection";
 
-    @ConfigItem(keyName = "farmingEnabled", name = "Enable Farming", description = "Sta Farming toe", section = farmingSection, position = 0)
-    default boolean farmingEnabled() { return true; }
-
-    @ConfigItem(keyName = "farmingTargetLevel", name = "Target Level", description = "Fallback farming", section = farmingSection, position = 1)
-    default int farmingTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "farmingRunMode", name = "Run Mode", description = "Herb / Tree / Fruit / All", section = farmingSection, position = 2)
+    @ConfigItem(keyName = "farmingRunMode", name = "Run Mode", description = "Herb / Tree / Fruit / All", section = farmingSection, position = 0)
     default FarmingRunMode farmingRunMode() { return FarmingRunMode.HERB_ONLY; }
 
-    @ConfigItem(keyName = "farmingUseCompost", name = "Use Compost", description = "Gebruik (ultra) compost", section = farmingSection, position = 3)
+    @ConfigItem(keyName = "farmingUseCompost", name = "Use Compost", description = "Gebruik (ultra) compost", section = farmingSection, position = 1)
     default CompostMode farmingUseCompost() { return CompostMode.SUPER; }
 
-    @ConfigItem(keyName = "farmingBirdHouse", name = "Include Birdhouses", description = "Voeg birdhouse run toe", section = farmingSection, position = 4)
+    @ConfigItem(keyName = "farmingBirdHouse", name = "Include Birdhouses", description = "Voeg birdhouse run toe", section = farmingSection, position = 2)
     default boolean farmingBirdHouse() { return false; }
 
     /* =====================================================
-       ARTISAN / PROCESSING (Smithing / Fletching / Crafting / Cooking / Firemaking / Herblore / Runecrafting / Construction / Farming (boven) / Slayer / Thieving)
+       ARTISAN / PROCESSING
        ===================================================== */
 
     @ConfigSection(
@@ -379,19 +306,13 @@ public interface AllInOneConfig extends Config {
     )
     String smithingSection = "smithingSection";
 
-    @ConfigItem(keyName = "smithingEnabled", name = "Enable Smithing", description = "Sta Smithing toe", section = smithingSection, position = 0)
-    default boolean smithingEnabled() { return true; }
-
-    @ConfigItem(keyName = "smithingTargetLevel", name = "Target Level", description = "Fallback smithing", section = smithingSection, position = 1)
-    default int smithingTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "smithingMode", name = "Mode", description = "Anvil / Blast / Cannonballs", section = smithingSection, position = 2)
+    @ConfigItem(keyName = "smithingMode", name = "Mode", description = "Anvil / Blast / Cannonballs", section = smithingSection, position = 0)
     default SmithingMode smithingMode() { return SmithingMode.ANVIL; }
 
-    @ConfigItem(keyName = "smithingBarType", name = "Bar Type", description = "iron/steel/mith/addy/rune", section = smithingSection, position = 3)
+    @ConfigItem(keyName = "smithingBarType", name = "Bar Type", description = "iron/steel/mith/addy/rune", section = smithingSection, position = 1)
     default String smithingBarType() { return "steel"; }
 
-    @ConfigItem(keyName = "smithingUseCoalBag", name = "Coal Bag", description = "Gebruik coal bag (indien aanwezig)", section = smithingSection, position = 4)
+    @ConfigItem(keyName = "smithingUseCoalBag", name = "Coal Bag", description = "Gebruik coal bag (indien aanwezig)", section = smithingSection, position = 2)
     default boolean smithingUseCoalBag() { return true; }
 
     @ConfigSection(
@@ -402,16 +323,10 @@ public interface AllInOneConfig extends Config {
     )
     String fletchingSection = "fletchingSection";
 
-    @ConfigItem(keyName = "fletchingEnabled", name = "Enable Fletching", description = "Sta Fletching toe", section = fletchingSection, position = 0)
-    default boolean fletchingEnabled() { return true; }
-
-    @ConfigItem(keyName = "fletchingTargetLevel", name = "Target Level", description = "Fallback fletching", section = fletchingSection, position = 1)
-    default int fletchingTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "fletchingMode", name = "Mode", description = "Logs->Longbow / Shafts / Darts", section = fletchingSection, position = 2)
+    @ConfigItem(keyName = "fletchingMode", name = "Mode", description = "Logs->Longbow / Shafts / Darts", section = fletchingSection, position = 0)
     default FletchingMode fletchingMode() { return FletchingMode.LONGBOW; }
 
-    @ConfigItem(keyName = "fletchingBankMode", name = "Bank Mode", description = "Bank / Sell GE (future)", section = fletchingSection, position = 3)
+    @ConfigItem(keyName = "fletchingBankMode", name = "Bank Mode", description = "Bank / Sell GE (future)", section = fletchingSection, position = 1)
     default BankMode fletchingBankMode() { return BankMode.BANK; }
 
     @ConfigSection(
@@ -422,16 +337,10 @@ public interface AllInOneConfig extends Config {
     )
     String craftingSection = "craftingSection";
 
-    @ConfigItem(keyName = "craftingEnabled", name = "Enable Crafting", description = "Sta Crafting toe", section = craftingSection, position = 0)
-    default boolean craftingEnabled() { return true; }
-
-    @ConfigItem(keyName = "craftingTargetLevel", name = "Target Level", description = "Fallback crafting", section = craftingSection, position = 1)
-    default int craftingTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "craftingMethod", name = "Method", description = "Glasses / Battlestaff / Gems", section = craftingSection, position = 2)
+    @ConfigItem(keyName = "craftingMethod", name = "Method", description = "Glasses / Battlestaff / Gems", section = craftingSection, position = 0)
     default CraftingMethod craftingMethod() { return CraftingMethod.GEMS; }
 
-    @ConfigItem(keyName = "craftingUsePortable", name = "Use Furnace (future)", description = "Placeholder voor boosts", section = craftingSection, position = 3)
+    @ConfigItem(keyName = "craftingUsePortable", name = "Use Furnace (future)", description = "Placeholder voor boosts", section = craftingSection, position = 1)
     default boolean craftingUsePortable() { return false; }
 
     @ConfigSection(
@@ -442,16 +351,10 @@ public interface AllInOneConfig extends Config {
     )
     String cookingSection = "cookingSection";
 
-    @ConfigItem(keyName = "cookingEnabled", name = "Enable Cooking", description = "Sta Cooking toe", section = cookingSection, position = 0)
-    default boolean cookingEnabled() { return true; }
-
-    @ConfigItem(keyName = "cookingTargetLevel", name = "Target Level", description = "Fallback cooking", section = cookingSection, position = 1)
-    default int cookingTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "cookingMode", name = "Mode", description = "Range / Fire / Hosidius", section = cookingSection, position = 2)
+    @ConfigItem(keyName = "cookingMode", name = "Mode", description = "Range / Fire / Hosidius", section = cookingSection, position = 0)
     default CookingMode cookingMode() { return CookingMode.RANGE; }
 
-    @ConfigItem(keyName = "cookingGauntlets", name = "Cooking Gauntlets", description = "Zijn gauntlets aanwezig gebruiken", section = cookingSection, position = 3)
+    @ConfigItem(keyName = "cookingGauntlets", name = "Cooking Gauntlets", description = "Zijn gauntlets aanwezig gebruiken", section = cookingSection, position = 1)
     default boolean cookingGauntlets() { return true; }
 
     @ConfigSection(
@@ -462,16 +365,10 @@ public interface AllInOneConfig extends Config {
     )
     String firemakingSection = "firemakingSection";
 
-    @ConfigItem(keyName = "fmEnabled", name = "Enable Firemaking", description = "Sta Firemaking toe", section = firemakingSection, position = 0)
-    default boolean fmEnabled() { return true; }
-
-    @ConfigItem(keyName = "fmTargetLevel", name = "Target Level", description = "Fallback fm", section = firemakingSection, position = 1)
-    default int fmTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "fmMode", name = "Mode", description = "Line / Wintertodt (future) / Pyromania", section = firemakingSection, position = 2)
+    @ConfigItem(keyName = "fmMode", name = "Mode", description = "Line / Wintertodt (future) / Pyromania", section = firemakingSection, position = 0)
     default FiremakingMode fmMode() { return FiremakingMode.LINE; }
 
-    @ConfigItem(keyName = "fmUseStaminas", name = "Use Stamina", description = "Stamina potions gebruiken", section = firemakingSection, position = 3)
+    @ConfigItem(keyName = "fmUseStaminas", name = "Use Stamina", description = "Stamina potions gebruiken", section = firemakingSection, position = 1)
     default boolean fmUseStaminas() { return false; }
 
     @ConfigSection(
@@ -482,16 +379,10 @@ public interface AllInOneConfig extends Config {
     )
     String herbloreSection = "herbloreSection";
 
-    @ConfigItem(keyName = "herbloreEnabled", name = "Enable Herblore", description = "Sta Herblore toe", section = herbloreSection, position = 0)
-    default boolean herbloreEnabled() { return true; }
-
-    @ConfigItem(keyName = "herbloreTargetLevel", name = "Target Level", description = "Fallback herblore", section = herbloreSection, position = 1)
-    default int herbloreTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "herbloreMode", name = "Mode", description = "Clean / Unf / Mix / Make Tar", section = herbloreSection, position = 2)
+    @ConfigItem(keyName = "herbloreMode", name = "Mode", description = "Clean / Unf / Mix / Make Tar", section = herbloreSection, position = 0)
     default HerbloreMode herbloreMode() { return HerbloreMode.CLEAN; }
 
-    @ConfigItem(keyName = "herbloreUseSecondaries", name = "Use Secondaries", description = "Voegt secondaries toe bij mixen", section = herbloreSection, position = 3)
+    @ConfigItem(keyName = "herbloreUseSecondaries", name = "Use Secondaries", description = "Voegt secondaries toe bij mixen", section = herbloreSection, position = 1)
     default boolean herbloreUseSecondaries() { return true; }
 
     @ConfigSection(
@@ -502,19 +393,13 @@ public interface AllInOneConfig extends Config {
     )
     String runecraftingSection = "runecraftingSection";
 
-    @ConfigItem(keyName = "rcEnabled", name = "Enable Runecrafting", description = "Sta RC toe", section = runecraftingSection, position = 0)
-    default boolean rcEnabled() { return true; }
-
-    @ConfigItem(keyName = "rcTargetLevel", name = "Target Level", description = "Fallback rc", section = runecraftingSection, position = 1)
-    default int rcTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "rcMethod", name = "Method", description = "Altars / Abyss / GOTR / Lava", section = runecraftingSection, position = 2)
+    @ConfigItem(keyName = "rcMethod", name = "Method", description = "Altars / Abyss / GOTR / Lava", section = runecraftingSection, position = 0)
     default RunecraftMethod rcMethod() { return RunecraftMethod.ABYSS; }
 
-    @ConfigItem(keyName = "rcUsePouches", name = "Use Pouches", description = "Gebruik pouches", section = runecraftingSection, position = 3)
+    @ConfigItem(keyName = "rcUsePouches", name = "Use Pouches", description = "Gebruik pouches", section = runecraftingSection, position = 1)
     default boolean rcUsePouches() { return true; }
 
-    @ConfigItem(keyName = "rcRepairWithNpc", name = "Use NPC Repair", description = "Use Dark Mage repair", section = runecraftingSection, position = 4)
+    @ConfigItem(keyName = "rcRepairWithNpc", name = "Use NPC Repair", description = "Use Dark Mage repair", section = runecraftingSection, position = 2)
     default boolean rcRepairWithNpc() { return true; }
 
     @ConfigSection(
@@ -525,16 +410,10 @@ public interface AllInOneConfig extends Config {
     )
     String constructionSection = "constructionSection";
 
-    @ConfigItem(keyName = "constructionEnabled", name = "Enable Construction", description = "Sta Construction toe", section = constructionSection, position = 0)
-    default boolean constructionEnabled() { return true; }
-
-    @ConfigItem(keyName = "constructionTargetLevel", name = "Target Level", description = "Fallback con", section = constructionSection, position = 1)
-    default int constructionTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "constructionMethod", name = "Method", description = "Oak Larders / Mahogany / etc", section = constructionSection, position = 2)
+    @ConfigItem(keyName = "constructionMethod", name = "Method", description = "Oak Larders / Mahogany / etc", section = constructionSection, position = 0)
     default ConstructionMethod constructionMethod() { return ConstructionMethod.OAK_LARDER; }
 
-    @ConfigItem(keyName = "constructionUseServant", name = "Use Servant", description = "Demon butler etc.", section = constructionSection, position = 3)
+    @ConfigItem(keyName = "constructionUseServant", name = "Use Servant", description = "Demon butler etc.", section = constructionSection, position = 1)
     default boolean constructionUseServant() { return true; }
 
     @ConfigSection(
@@ -545,16 +424,10 @@ public interface AllInOneConfig extends Config {
     )
     String slayerSection = "slayerSection";
 
-    @ConfigItem(keyName = "slayerEnabled", name = "Enable Slayer", description = "Sta Slayer toe", section = slayerSection, position = 0)
-    default boolean slayerEnabled() { return true; }
-
-    @ConfigItem(keyName = "slayerTargetLevel", name = "Target Level", description = "Fallback slayer", section = slayerSection, position = 1)
-    default int slayerTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "slayerTaskStrategy", name = "Task Strategy", description = "BLOCK / SKIP / EXTEND (placeholder)", section = slayerSection, position = 2)
+    @ConfigItem(keyName = "slayerTaskStrategy", name = "Task Strategy", description = "BLOCK / SKIP / EXTEND (placeholder)", section = slayerSection, position = 0)
     default SlayerTaskStrategy slayerTaskStrategy() { return SlayerTaskStrategy.BASIC; }
 
-    @ConfigItem(keyName = "slayerUseCannon", name = "Use Cannon", description = "Cannon plaatsen indien mogelijk", section = slayerSection, position = 3)
+    @ConfigItem(keyName = "slayerUseCannon", name = "Use Cannon", description = "Cannon plaatsen indien mogelijk", section = slayerSection, position = 1)
     default boolean slayerUseCannon() { return false; }
 
     @ConfigSection(
@@ -565,19 +438,13 @@ public interface AllInOneConfig extends Config {
     )
     String thievingSection = "thievingSection";
 
-    @ConfigItem(keyName = "thievingEnabled", name = "Enable Thieving", description = "Sta Thieving toe", section = thievingSection, position = 0)
-    default boolean thievingEnabled() { return true; }
-
-    @ConfigItem(keyName = "thievingTargetLevel", name = "Target Level", description = "Fallback thieving", section = thievingSection, position = 1)
-    default int thievingTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "thievingMethod", name = "Method", description = "Stalls / Knights / Ardy / Pyramid", section = thievingSection, position = 2)
+    @ConfigItem(keyName = "thievingMethod", name = "Method", description = "Stalls / Knights / Ardy / Pyramid", section = thievingSection, position = 0)
     default ThievingMethod thievingMethod() { return ThievingMethod.STALLS; }
 
-    @ConfigItem(keyName = "thievingFoodBelow", name = "Eet onder HP%", description = "HP threshold", section = thievingSection, position = 3)
+    @ConfigItem(keyName = "thievingFoodBelow", name = "Eet onder HP%", description = "HP threshold", section = thievingSection, position = 1)
     default int thievingFoodBelow() { return 40; }
 
-    @ConfigItem(keyName = "thievingUseDodgy", name = "Use Dodgy Necklace", description = "Dodgy necklace equip check", section = thievingSection, position = 4)
+    @ConfigItem(keyName = "thievingUseDodgy", name = "Use Dodgy Necklace", description = "Dodgy necklace equip check", section = thievingSection, position = 2)
     default boolean thievingUseDodgy() { return true; }
 
     @ConfigSection(
@@ -588,19 +455,13 @@ public interface AllInOneConfig extends Config {
     )
     String agilitySection = "agilitySection";
 
-    @ConfigItem(keyName = "agilityEnabled", name = "Enable Agility", description = "Sta Agility toe", section = agilitySection, position = 0)
-    default boolean agilityEnabled() { return true; }
-
-    @ConfigItem(keyName = "agilityTargetLevel", name = "Target Level", description = "Fallback agility", section = agilitySection, position = 1)
-    default int agilityTargetLevel() { return 99; }
-
-    @ConfigItem(keyName = "agilityCourseMode", name = "Course Mode", description = "AUTO / BEST / SPECIFIEK", section = agilitySection, position = 2)
+    @ConfigItem(keyName = "agilityCourseMode", name = "Course Mode", description = "AUTO / BEST / SPECIFIEK", section = agilitySection, position = 0)
     default AgilityCourseMode agilityCourseMode() { return AgilityCourseMode.AUTO; }
 
-    @ConfigItem(keyName = "agilityUseStamina", name = "Use Stamina", description = "Gebruik stamina potions", section = agilitySection, position = 3)
+    @ConfigItem(keyName = "agilityUseStamina", name = "Use Stamina", description = "Gebruik stamina potions", section = agilitySection, position = 1)
     default boolean agilityUseStamina() { return true; }
 
-    @ConfigItem(keyName = "agilityLootMarks", name = "Loot Marks", description = "Pak Marks of Grace op", section = agilitySection, position = 4)
+    @ConfigItem(keyName = "agilityLootMarks", name = "Loot Marks", description = "Pak Marks of Grace op", section = agilitySection, position = 2)
     default boolean agilityLootMarks() { return true; }
 
     /* =====================================================
