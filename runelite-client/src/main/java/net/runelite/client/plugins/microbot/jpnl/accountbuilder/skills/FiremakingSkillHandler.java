@@ -86,43 +86,47 @@ public class FiremakingSkillHandler implements SkillHandler {
     private static final List<FiremakingLocation> FIREMAKING_LOCATIONS = Arrays.asList(
             new FiremakingLocation("Grand Exchange",
                 new WorldPoint(3162, 3485, 0),  // Start west of GE bank
-                new WorldPoint(3190, 3485, 0),  // End east (28 tiles)
+                new WorldPoint(3190, 3485, 0),  // End east (>=27 tiles)
                 BankLocation.GRAND_EXCHANGE),
             new FiremakingLocation("Varrock West Bank",
                 new WorldPoint(3185, 3436, 0),  // Start west of bank
-                new WorldPoint(3213, 3436, 0),  // End east (28 tiles)
+                new WorldPoint(3213, 3436, 0),  // End east (>=27 tiles)
                 BankLocation.VARROCK_WEST),
+            new FiremakingLocation("Varrock East Bank",
+                new WorldPoint(3245, 3421, 0),  // Start west of bank (one tile west of bank entrance line)
+                new WorldPoint(3273, 3421, 0),  // End east
+                BankLocation.VARROCK_EAST),
             new FiremakingLocation("Edgeville Bank",
                 new WorldPoint(3095, 3490, 0),  // Start west of bank
-                new WorldPoint(3123, 3490, 0),  // End east (28 tiles)
+                new WorldPoint(3123, 3490, 0),  // End east
                 BankLocation.EDGEVILLE),
             new FiremakingLocation("Falador East Bank",
                 new WorldPoint(3015, 3356, 0),  // Start west of bank
-                new WorldPoint(3043, 3356, 0),  // End east (28 tiles)
+                new WorldPoint(3043, 3356, 0),  // End east
                 BankLocation.FALADOR_EAST),
             new FiremakingLocation("Draynor Village Bank",
                 new WorldPoint(3095, 3244, 0),  // Start west of bank
-                new WorldPoint(3123, 3244, 0),  // End east (28 tiles)
+                new WorldPoint(3123, 3244, 0),  // End east
                 BankLocation.DRAYNOR_VILLAGE),
-            new FiremakingLocation("Lumbridge Castle Bank",
-                new WorldPoint(3210, 3218, 0),  // Start west of castle bank (ground floor)
-                new WorldPoint(3238, 3218, 0),  // End east (28 tiles)
+            new FiremakingLocation("Lumbridge Bank",
+                new WorldPoint(3208, 3218, 0),  // Ground level start (south-west of castle)
+                new WorldPoint(3236, 3218, 0),  // End east
                 BankLocation.LUMBRIDGE_TOP),
             new FiremakingLocation("Al Kharid Bank",
                 new WorldPoint(3272, 3169, 0),  // Start west of bank
-                new WorldPoint(3300, 3169, 0),  // End east (28 tiles)
+                new WorldPoint(3300, 3169, 0),  // End east
                 BankLocation.AL_KHARID),
             new FiremakingLocation("Catherby Bank",
                 new WorldPoint(2810, 3441, 0),  // Start west of bank
-                new WorldPoint(2838, 3441, 0),  // End east (28 tiles)
+                new WorldPoint(2838, 3441, 0),  // End east
                 BankLocation.CATHERBY),
             new FiremakingLocation("Seers Village Bank",
                 new WorldPoint(2725, 3493, 0),  // Start west of bank
-                new WorldPoint(2753, 3493, 0),  // End east (28 tiles)
-                BankLocation.CATHERBY),
+                new WorldPoint(2753, 3493, 0),  // End east
+                BankLocation.CAMELOT), // FIX: was incorrectly CATHERBY
             new FiremakingLocation("Yanille Bank",
                 new WorldPoint(2615, 3094, 0),  // Start west of bank
-                new WorldPoint(2643, 3094, 0),  // End east (28 tiles)
+                new WorldPoint(2643, 3094, 0),  // End east
                 BankLocation.YANILLE)
     );
 
@@ -257,20 +261,22 @@ public class FiremakingSkillHandler implements SkillHandler {
             return;
         }
 
-        FiremakingLocation best = null;
         WorldPoint playerLocation = Microbot.getClient().getLocalPlayer().getWorldLocation();
+        // Keep current location if still nearby and valid
+        if (currentLocation != null && isValidFiremakingLocation(currentLocation)) {
+            if (playerLocation.distanceTo(currentLocation.startLocation) < 80) {
+                return; // stay on this line
+            }
+        }
 
+        FiremakingLocation best = null;
+        int bestDist = Integer.MAX_VALUE;
         for (FiremakingLocation location : FIREMAKING_LOCATIONS) {
-            if (best == null) {
+            if (!isValidFiremakingLocation(location)) continue;
+            int dist = playerLocation.distanceTo(location.startLocation);
+            if (dist < bestDist) {
                 best = location;
-            } else {
-                // Compare distance to the actual firemaking start location, not the bank
-                double currentDistance = Rs2Walker.getDistanceBetween(playerLocation, location.startLocation);
-                double bestDistance = Rs2Walker.getDistanceBetween(playerLocation, best.startLocation);
-
-                if (currentDistance < bestDistance) {
-                    best = location;
-                }
+                bestDist = dist;
             }
         }
         currentLocation = best;
@@ -533,6 +539,31 @@ public class FiremakingSkillHandler implements SkillHandler {
         }
         Microbot.status = "Firemaking: failed to open bank!";
         return false;
+    }
+
+    private boolean isValidFiremakingLocation(FiremakingLocation loc) {
+        if (loc == null) return false;
+        // Ensure east-west straight line same plane
+        if (loc.startLocation.getPlane() != loc.endLocation.getPlane()) return false;
+        if (loc.startLocation.getY() != loc.endLocation.getY()) return false;
+        int length = Math.abs(loc.endLocation.getX() - loc.startLocation.getX());
+        if (length < 27) return false; // need at least 27 steps east for full inventory burn (>=28 tiles inclusive)
+        // Bank requirements
+        if (loc.bankLocation != null && !loc.bankLocation.hasRequirements()) return false;
+        // Only perform heavy walkable check if nearby to avoid loading issues when far
+        WorldPoint playerLoc = Rs2Player.getWorldLocation();
+        if (playerLoc != null && playerLoc.distanceTo(loc.startLocation) < 32) {
+            int walkable = 0;
+            int total = length + 1;
+            int minX = Math.min(loc.startLocation.getX(), loc.endLocation.getX());
+            int maxX = Math.max(loc.startLocation.getX(), loc.endLocation.getX());
+            for (int x = minX; x <= maxX; x++) {
+                WorldPoint p = new WorldPoint(x, loc.startLocation.getY(), loc.startLocation.getPlane());
+                if (net.runelite.client.plugins.microbot.util.tile.Rs2Tile.isWalkable(p)) walkable++;
+            }
+            if (walkable < (int)(total * 0.8)) return false; // allow a few blocked tiles
+        }
+        return true;
     }
 
     // Debug getters
