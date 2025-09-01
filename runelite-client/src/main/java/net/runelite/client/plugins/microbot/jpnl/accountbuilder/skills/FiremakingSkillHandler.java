@@ -15,20 +15,16 @@ import java.util.*;
 
 public class FiremakingSkillHandler implements SkillHandler {
     private boolean enabled = true;
+    private Mode mode = Mode.REGULAR;
     private String configuredLogType = "AUTO"; // AUTO, NORMAL, OAK, WILLOW, MAPLE, YEW, MAGIC, etc.
-    private String configuredMethod = "REGULAR"; // REGULAR, CAMPFIRE
 
     private long lastAttempt = 0L;
     private static final long ATTEMPT_COOLDOWN = 1200L;
     private WorldPoint currentFireLocation = null;
     private boolean waitingForFireSuccess = false;
 
-    // Burning animation IDs
-    private static final List<Integer> BURNING_ANIMATION_IDS = Arrays.asList(
-            733, // Tinderbox on logs
-            6700, // Lighting fire
-            6702  // Another burning animation
-    );
+    // Enums
+    private enum Mode { REGULAR, CAMPFIRE }
 
     // Log type data structure
     private static class LogType {
@@ -86,47 +82,47 @@ public class FiremakingSkillHandler implements SkillHandler {
             new LogType("REDWOOD", "Redwood logs", 90)
     );
 
-    // Firemaking locations
+    // Firemaking locations - classic burning spots (east-west lines with 27+ free tiles)
     private static final List<FiremakingLocation> FIREMAKING_LOCATIONS = Arrays.asList(
-            new FiremakingLocation("Varrock West Bank",
-                new WorldPoint(3183, 3436, 0),
-                new WorldPoint(3183, 3395, 0),
-                BankLocation.VARROCK_WEST),
             new FiremakingLocation("Grand Exchange",
-                new WorldPoint(3164, 3486, 0),
-                new WorldPoint(3164, 3450, 0),
+                new WorldPoint(3162, 3485, 0),  // Start west of GE bank
+                new WorldPoint(3190, 3485, 0),  // End east (28 tiles)
                 BankLocation.GRAND_EXCHANGE),
-            new FiremakingLocation("Falador East Bank",
-                new WorldPoint(3013, 3356, 0),
-                new WorldPoint(3013, 3320, 0),
-                BankLocation.FALADOR_EAST),
-            new FiremakingLocation("Seers Village Bank",
-                new WorldPoint(2727, 3493, 0),
-                new WorldPoint(2727, 3457, 0),
-                BankLocation.CATHERBY),
+            new FiremakingLocation("Varrock West Bank",
+                new WorldPoint(3185, 3436, 0),  // Start west of bank
+                new WorldPoint(3213, 3436, 0),  // End east (28 tiles)
+                BankLocation.VARROCK_WEST),
             new FiremakingLocation("Edgeville Bank",
-                new WorldPoint(3094, 3499, 0),
-                new WorldPoint(3094, 3463, 0),
+                new WorldPoint(3095, 3490, 0),  // Start west of bank
+                new WorldPoint(3123, 3490, 0),  // End east (28 tiles)
                 BankLocation.EDGEVILLE),
+            new FiremakingLocation("Falador East Bank",
+                new WorldPoint(3015, 3356, 0),  // Start west of bank
+                new WorldPoint(3043, 3356, 0),  // End east (28 tiles)
+                BankLocation.FALADOR_EAST),
             new FiremakingLocation("Draynor Village Bank",
-                new WorldPoint(3093, 3246, 0),
-                new WorldPoint(3093, 3210, 0),
+                new WorldPoint(3095, 3244, 0),  // Start west of bank
+                new WorldPoint(3123, 3244, 0),  // End east (28 tiles)
                 BankLocation.DRAYNOR_VILLAGE),
-            new FiremakingLocation("Lumbridge Top Bank",
-                new WorldPoint(3207, 3220, 0),
-                new WorldPoint(3207, 3184, 0),
+            new FiremakingLocation("Lumbridge Castle Bank",
+                new WorldPoint(3210, 3218, 0),  // Start west of castle bank (ground floor)
+                new WorldPoint(3238, 3218, 0),  // End east (28 tiles)
                 BankLocation.LUMBRIDGE_TOP),
             new FiremakingLocation("Al Kharid Bank",
-                new WorldPoint(3270, 3169, 0),
-                new WorldPoint(3270, 3133, 0),
+                new WorldPoint(3272, 3169, 0),  // Start west of bank
+                new WorldPoint(3300, 3169, 0),  // End east (28 tiles)
                 BankLocation.AL_KHARID),
             new FiremakingLocation("Catherby Bank",
-                new WorldPoint(2808, 3441, 0),
-                new WorldPoint(2808, 3405, 0),
+                new WorldPoint(2810, 3441, 0),  // Start west of bank
+                new WorldPoint(2838, 3441, 0),  // End east (28 tiles)
+                BankLocation.CATHERBY),
+            new FiremakingLocation("Seers Village Bank",
+                new WorldPoint(2725, 3493, 0),  // Start west of bank
+                new WorldPoint(2753, 3493, 0),  // End east (28 tiles)
                 BankLocation.CATHERBY),
             new FiremakingLocation("Yanille Bank",
-                new WorldPoint(2613, 3094, 0),
-                new WorldPoint(2613, 3058, 0),
+                new WorldPoint(2615, 3094, 0),  // Start west of bank
+                new WorldPoint(2643, 3094, 0),  // End east (28 tiles)
                 BankLocation.YANILLE)
     );
 
@@ -151,26 +147,30 @@ public class FiremakingSkillHandler implements SkillHandler {
             String modeString = settings.getMode();
             if (modeString != null) {
                 if (modeString.equals("CAMPFIRE")) {
-                    configuredMethod = "CAMPFIRE";
+                    mode = Mode.CAMPFIRE;
                     configuredLogType = "AUTO"; // Campfire uses any available logs
                 } else if (modeString.equals("REGULAR")) {
-                    // Legacy support: REGULAR is treated as AUTO regular firemaking
-                    configuredMethod = "REGULAR";
+                    mode = Mode.REGULAR;
                     configuredLogType = "AUTO";
                 } else {
-                    configuredMethod = "REGULAR";
+                    mode = Mode.REGULAR;
                     configuredLogType = modeString; // Use the selected log type (AUTO, NORMAL, OAK, etc.)
                 }
             }
 
-            // Bot always banks for logs automatically - no user configuration needed
-            // mode = Mode.BANK;
-
-            // Legacy support for flags (if any old code still uses them)
+            // Extract log type from flags if provided
             if (settings.getFlags() != null) {
                 for (String flag : settings.getFlags()) {
-                    if (flag.startsWith("LOG_TYPE:")) {
-                        configuredLogType = flag.substring("LOG_TYPE:".length());
+                    if (flag.startsWith("FM_MODE:")) {
+                        String flagMode = flag.substring("FM_MODE:".length());
+                        if (flagMode.equals("CAMPFIRE")) {
+                            mode = Mode.CAMPFIRE;
+                            configuredLogType = "AUTO";
+                        } else if (Arrays.asList("AUTO", "NORMAL", "OAK", "WILLOW", "TEAK", "MAPLE", "MAHOGANY", "YEW", "MAGIC", "REDWOOD").contains(flagMode)) {
+                            mode = Mode.REGULAR;
+                            configuredLogType = flagMode;
+                        }
+                        break;
                     }
                 }
             }
@@ -181,18 +181,52 @@ public class FiremakingSkillHandler implements SkillHandler {
         int level = Microbot.getClient().getRealSkillLevel(Skill.FIREMAKING);
         LogType best = null;
 
-        for (LogType logType : LOG_TYPES) {
-            if (level >= logType.minLevel) {
-                // If user has configured a specific log type, use that
-                if (!"AUTO".equals(configuredLogType)) {
-                    if (configuredLogType.equals(logType.name)) {
+        // If user has configured a specific log type, use that
+        if (!"AUTO".equals(configuredLogType)) {
+            for (LogType logType : LOG_TYPES) {
+                if (level >= logType.minLevel && configuredLogType.equals(logType.name)) {
+                    best = logType;
+                    break;
+                }
+            }
+        } else {
+            // Auto mode: find the highest level logs that are actually available in bank
+            // First try to find the highest level logs we can use
+            for (int i = LOG_TYPES.size() - 1; i >= 0; i--) {
+                LogType logType = LOG_TYPES.get(i);
+                if (level >= logType.minLevel) {
+                    // Check if we have these logs in inventory already, or can get them from bank
+                    if (Rs2Inventory.contains(logType.itemName) ||
+                        (Rs2Bank.isOpen() && Rs2Bank.hasItem(logType.itemName)) ||
+                        (!Rs2Bank.isOpen() && canGetFromBank(logType.itemName))) {
                         best = logType;
                         break;
                     }
-                } else {
-                    // Auto mode: use highest level logs available
-                    if (best == null || logType.minLevel > best.minLevel) {
+                }
+            }
+
+            // If no high-level logs found, fallback to any logs we can actually use
+            if (best == null) {
+                for (LogType logType : LOG_TYPES) {
+                    if (level >= logType.minLevel) {
+                        if (Rs2Inventory.contains(logType.itemName) ||
+                            (Rs2Bank.isOpen() && Rs2Bank.hasItem(logType.itemName)) ||
+                            (!Rs2Bank.isOpen() && canGetFromBank(logType.itemName))) {
+                            best = logType;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Final fallback: if still nothing found, just use the highest level we can access
+            // This ensures we don't get stuck even if bank check fails
+            if (best == null) {
+                for (int i = LOG_TYPES.size() - 1; i >= 0; i--) {
+                    LogType logType = LOG_TYPES.get(i);
+                    if (level >= logType.minLevel) {
                         best = logType;
+                        break;
                     }
                 }
             }
@@ -200,8 +234,25 @@ public class FiremakingSkillHandler implements SkillHandler {
         currentLogType = best;
     }
 
+    private boolean canGetFromBank(String itemName) {
+        // Only check bank if we're close to a bank to avoid unnecessary walking
+        if (currentLocation != null && currentLocation.bankLocation != null) {
+            WorldPoint bankLocation = currentLocation.bankLocation.getWorldPoint();
+            if (Rs2Player.getWorldLocation().distanceTo(bankLocation) <= 20) {
+                // We're close to bank, try to check if item is available
+                boolean wasOpen = Rs2Bank.isOpen();
+                if (!wasOpen && Rs2Bank.openBank()) {
+                    boolean hasItem = Rs2Bank.hasItem(itemName);
+                    if (!wasOpen) Rs2Bank.closeBank(); // Close if we opened it
+                    return hasItem;
+                }
+            }
+        }
+        return false; // Assume not available if we can't easily check
+    }
+
     private void updateCurrentLocation() {
-        if ("CAMPFIRE".equals(configuredMethod)) {
+        if (mode == Mode.CAMPFIRE) {
             updateCurrentCampfireLocation();
             return;
         }
@@ -210,10 +261,16 @@ public class FiremakingSkillHandler implements SkillHandler {
         WorldPoint playerLocation = Microbot.getClient().getLocalPlayer().getWorldLocation();
 
         for (FiremakingLocation location : FIREMAKING_LOCATIONS) {
-            if (best == null || (location.bankLocation != null &&
-                    Rs2Walker.getDistanceBetween(playerLocation, location.bankLocation.getWorldPoint()) <
-                            Rs2Walker.getDistanceBetween(playerLocation, best.bankLocation.getWorldPoint()))) {
+            if (best == null) {
                 best = location;
+            } else {
+                // Compare distance to the actual firemaking start location, not the bank
+                double currentDistance = Rs2Walker.getDistanceBetween(playerLocation, location.startLocation);
+                double bestDistance = Rs2Walker.getDistanceBetween(playerLocation, best.startLocation);
+
+                if (currentDistance < bestDistance) {
+                    best = location;
+                }
             }
         }
         currentLocation = best;
@@ -242,10 +299,10 @@ public class FiremakingSkillHandler implements SkillHandler {
             return;
         }
 
-        if ("CAMPFIRE".equals(configuredMethod) && currentCampfireLocation == null) {
+        if (mode == Mode.CAMPFIRE && currentCampfireLocation == null) {
             Microbot.status = "Firemaking: no campfire location available";
             return;
-        } else if (!"CAMPFIRE".equals(configuredMethod) && currentLocation == null) {
+        } else if (mode == Mode.REGULAR && currentLocation == null) {
             Microbot.status = "Firemaking: no firemaking location available";
             return;
         }
@@ -261,7 +318,7 @@ public class FiremakingSkillHandler implements SkillHandler {
             return;
         }
 
-        if ("CAMPFIRE".equals(configuredMethod)) {
+        if (mode == Mode.CAMPFIRE) {
             handleCampfireMethod();
         } else {
             handleRegularMethod();
@@ -273,87 +330,87 @@ public class FiremakingSkillHandler implements SkillHandler {
     }
 
     private void obtainTools() {
-        WorldPoint bankLocation = null;
-        if ("CAMPFIRE".equals(configuredMethod) && currentCampfireLocation != null) {
-            bankLocation = currentCampfireLocation.bankLocation.getWorldPoint();
-        } else if (currentLocation != null) {
-            bankLocation = currentLocation.bankLocation.getWorldPoint();
-        }
+        if (!openNearestBank()) return;
 
-        if (bankLocation == null) {
-            Microbot.status = "Firemaking: no bank location available";
-            return;
-        }
-
-        if (Rs2Player.getWorldLocation().distanceTo(bankLocation) > 10) {
-            if (Rs2Walker.walkTo(bankLocation, 2)) {
-                Microbot.status = "Firemaking: walking to bank";
-            }
-            return;
-        }
-
-        if (!Rs2Bank.isOpen()) {
-            if (Rs2Bank.openBank()) {
-                Microbot.status = "Firemaking: opening bank";
-            }
-            return;
-        }
+        boolean needsWithdraw = false;
 
         if (!Rs2Inventory.hasItem("Tinderbox")) {
-            Rs2Bank.withdrawOne("Tinderbox");
-            Microbot.status = "Firemaking: withdrawing tinderbox";
-            return;
+            if (Rs2Bank.hasItem("Tinderbox")) {
+                Rs2Bank.withdrawOne("Tinderbox");
+                Microbot.status = "Firemaking: withdrawing tinderbox";
+                needsWithdraw = true;
+            } else {
+                Microbot.status = "Firemaking: no tinderbox found in bank";
+                Rs2Bank.closeBank();
+                return;
+            }
         }
 
+        // Try to get the current log type first
         if (!Rs2Inventory.hasItem(currentLogType.itemName)) {
-            Rs2Bank.withdrawAll(currentLogType.itemName);
-            Microbot.status = "Firemaking: withdrawing " + currentLogType.itemName;
-            return;
+            if (Rs2Bank.hasItem(currentLogType.itemName)) {
+                Rs2Bank.withdrawAll(currentLogType.itemName);
+                Microbot.status = "Firemaking: withdrawing " + currentLogType.itemName;
+                needsWithdraw = true;
+            } else {
+                // Current log type not available, try to find any available logs we can use
+                LogType fallbackLogType = findAvailableLogType();
+                if (fallbackLogType != null && !fallbackLogType.itemName.equals(currentLogType.itemName)) {
+                    currentLogType = fallbackLogType; // Update to use available logs
+                    Rs2Bank.withdrawAll(currentLogType.itemName);
+                    Microbot.status = "Firemaking: falling back to " + currentLogType.itemName;
+                    needsWithdraw = true;
+                } else {
+                    Microbot.status = "Firemaking: no logs found in bank";
+                }
+            }
         }
 
         Rs2Bank.closeBank();
+
+        if (!needsWithdraw) {
+            Microbot.status = "Firemaking: already have required tools";
+        }
+    }
+
+    private LogType findAvailableLogType() {
+        int level = Microbot.getClient().getRealSkillLevel(Skill.FIREMAKING);
+
+        // Try from highest to lowest level logs that we can actually use
+        for (int i = LOG_TYPES.size() - 1; i >= 0; i--) {
+            LogType logType = LOG_TYPES.get(i);
+            if (level >= logType.minLevel && Rs2Bank.hasItem(logType.itemName)) {
+                return logType;
+            }
+        }
+
+        // If nothing found, try any logs we have regardless of level (emergency fallback)
+        for (LogType logType : LOG_TYPES) {
+            if (Rs2Bank.hasItem(logType.itemName)) {
+                return logType;
+            }
+        }
+
+        return null; // No logs found at all
     }
 
     private void bankItems() {
-        WorldPoint bankLocation = null;
-        if ("CAMPFIRE".equals(configuredMethod) && currentCampfireLocation != null) {
-            bankLocation = currentCampfireLocation.bankLocation.getWorldPoint();
-        } else if (currentLocation != null) {
-            bankLocation = currentLocation.bankLocation.getWorldPoint();
+        if (!openNearestBank()) return;
+
+        Set<String> keep = new HashSet<>();
+        keep.add("Tinderbox");
+        if (Rs2Inventory.hasItem(currentLogType.itemName)) {
+            keep.add(currentLogType.itemName);
         }
 
-        if (bankLocation == null) {
-            Microbot.status = "Firemaking: no bank location available";
-            return;
-        }
+        Rs2Bank.depositAllExcept(keep.toArray(new String[0]));
 
-        if (Rs2Player.getWorldLocation().distanceTo(bankLocation) > 10) {
-            if (Rs2Walker.walkTo(bankLocation, 2)) {
-                Microbot.status = "Firemaking: walking to bank";
-            }
-            return;
-        }
-
-        if (!Rs2Bank.isOpen()) {
-            if (Rs2Bank.openBank()) {
-                Microbot.status = "Firemaking: opening bank";
-            }
-            return;
-        }
-
-        Rs2Bank.depositAllExcept("Tinderbox", currentLogType.itemName);
-
-        if (!Rs2Inventory.hasItem(currentLogType.itemName)) {
+        if (!Rs2Inventory.hasItem(currentLogType.itemName) && Rs2Bank.hasItem(currentLogType.itemName)) {
             Rs2Bank.withdrawAll(currentLogType.itemName);
         }
 
         Rs2Bank.closeBank();
         Microbot.status = "Firemaking: banked items";
-    }
-
-    private void dropItems() {
-        Rs2Inventory.dropAllExcept("Tinderbox", currentLogType.itemName);
-        Microbot.status = "Firemaking: dropped items";
     }
 
     private void handleCampfireMethod() {
@@ -400,91 +457,87 @@ public class FiremakingSkillHandler implements SkillHandler {
         return currentFireLocation;
     }
 
-    private void attemptCampfireTraining() {
-        long now = System.currentTimeMillis();
-        if (now - lastAttempt < ATTEMPT_COOLDOWN) return;
-
-        // Look for a campfire
-        for (int campfireId : currentCampfireLocation.campfireIds) {
-            var campfire = Rs2GameObject.findObjectById(campfireId);
-            if (campfire != null) {
-                if (Rs2GameObject.interact(campfire, "Cook")) {
-                    Microbot.status = "Firemaking: using campfire";
-                    lastAttempt = now;
-                    return;
-                }
-            }
-        }
-
-        // If no campfire interaction, try adding logs
-        if (Rs2Inventory.hasItem(currentLogType.itemName)) {
-            Rs2Inventory.use(currentLogType.itemName);
-            // Then click on a nearby campfire or ground
-            Microbot.status = "Firemaking: training at GE campfire with " + currentLogType.name.toLowerCase() + " logs";
-            lastAttempt = now;
-            return;
-        }
-
-        Microbot.status = "Firemaking: no logs for campfire training";
-        lastAttempt = now;
-    }
-
     private void attemptRegularFiremaking() {
         long now = System.currentTimeMillis();
         if (now - lastAttempt < ATTEMPT_COOLDOWN) return;
+        if (Rs2Player.isAnimating() || Rs2Player.isMoving()) return;
 
-        // Check if we're currently in a burning animation
-        if (waitingForFireSuccess) {
-            if (!Rs2Player.isAnimating() || !BURNING_ANIMATION_IDS.contains(Rs2Player.getAnimation())) {
-                // Animation finished, move to next position
-                waitingForFireSuccess = false;
-                moveToNextFirePosition();
-            }
-            Microbot.status = "Firemaking: lighting fire with " + currentLogType.name.toLowerCase() + " logs";
+        if (!Rs2Inventory.hasItem("Tinderbox") || !Rs2Inventory.hasItem(currentLogType.itemName)) {
+            Microbot.status = "Firemaking: missing required items";
             return;
         }
 
-        // Try to light a fire at current position
-        if (Rs2Inventory.hasItem(currentLogType.itemName)) {
-            if (Rs2Inventory.combine("Tinderbox", currentLogType.itemName)) {
-                waitingForFireSuccess = true;
-                Microbot.status = "Firemaking: attempting to light " + currentLogType.name.toLowerCase() + " logs";
+        // Use tinderbox on logs
+        if (Rs2Inventory.combine("Tinderbox", currentLogType.itemName)) {
+            Microbot.status = "Firemaking: lighting " + currentLogType.itemName;
+            lastAttempt = now;
+            waitingForFireSuccess = true;
+
+            // Move to next location after lighting (east-west movement)
+            if (currentLocation != null) {
+                if (currentFireLocation.getX() < currentLocation.endLocation.getX()) {
+                    // Move one tile east
+                    currentFireLocation = new WorldPoint(currentFireLocation.getX() + 1, currentFireLocation.getY(), currentFireLocation.getPlane());
+                } else {
+                    // Reached end, reset to start
+                    currentFireLocation = currentLocation.startLocation;
+                }
+            }
+        }
+    }
+
+    private void attemptCampfireTraining() {
+        long now = System.currentTimeMillis();
+        if (now - lastAttempt < ATTEMPT_COOLDOWN) return;
+        if (Rs2Player.isAnimating() || Rs2Player.isMoving()) return;
+
+        if (!Rs2Inventory.hasItem(currentLogType.itemName)) {
+            Microbot.status = "Firemaking: no logs to add to campfire";
+            return;
+        }
+
+        // Find and use the campfire
+        for (int campfireId : currentCampfireLocation.campfireIds) {
+            if (Rs2GameObject.interact(campfireId, "Add-logs")) {
+                Microbot.status = "Firemaking: adding " + currentLogType.itemName + " to campfire";
                 lastAttempt = now;
                 return;
             }
         }
 
-        Microbot.status = "Firemaking: no logs available";
-        lastAttempt = now;
+        Microbot.status = "Firemaking: campfire not found";
     }
 
-    private void moveToNextFirePosition() {
-        if (currentLocation == null) return;
-
-        WorldPoint current = Rs2Player.getWorldLocation();
-        WorldPoint start = currentLocation.startLocation;
-        WorldPoint end = currentLocation.endLocation;
-
-        // Determine direction (east-west or north-south)
-        if (start.getX() != end.getX()) {
-            // East-west movement
-            int direction = start.getX() < end.getX() ? 1 : -1;
-            currentFireLocation = new WorldPoint(current.getX() + direction, current.getY(), current.getPlane());
-        } else {
-            // North-south movement
-            int direction = start.getY() < end.getY() ? 1 : -1;
-            currentFireLocation = new WorldPoint(current.getX(), current.getY() + direction, current.getPlane());
+    private boolean openNearestBank() {
+        BankLocation bankLocation = null;
+        if (mode == Mode.CAMPFIRE && currentCampfireLocation != null) {
+            bankLocation = currentCampfireLocation.bankLocation;
+        } else if (currentLocation != null) {
+            bankLocation = currentLocation.bankLocation;
         }
 
-        // Check if we've gone too far
-        if (currentFireLocation.distanceTo(end) > 27) {
-            currentFireLocation = start; // Reset to beginning
+        if (bankLocation == null) {
+            Microbot.status = "Firemaking: no bank location available";
+            return false;
         }
+
+        int maxAttempts = 3;
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            boolean ok = Rs2Bank.walkToBankAndUseBank(bankLocation) && Rs2Bank.isOpen();
+            if (ok) {
+                Microbot.status = "Firemaking: bank opened";
+                return true;
+            }
+            Microbot.status = "Firemaking: opening bank (retry " + (attempt + 1) + ")...";
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+        }
+        Microbot.status = "Firemaking: failed to open bank!";
+        return false;
     }
 
     // Debug getters
     public boolean isEnabled() { return enabled; }
-    public String getMode() { return "BANK"; } // Always BANK mode
+    public String getMode() { return mode.name(); }
+    public String getConfiguredLogType() { return configuredLogType; }
     public String getCurrentLogType() { return currentLogType != null ? currentLogType.name : "None"; }
-    public String getCurrentMethod() { return configuredMethod; }
 }

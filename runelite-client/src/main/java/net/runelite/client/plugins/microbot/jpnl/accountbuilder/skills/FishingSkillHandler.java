@@ -131,13 +131,52 @@ public class FishingSkillHandler implements SkillHandler {
         // The bot will automatically upgrade tools when it reaches the required level
         int currentLvl = Microbot.getClient().getRealSkillLevel(Skill.FISHING);
 
-        if (currentLvl >= 40) {
+        // Check what tools are actually available and fallback to lower tiers if needed
+        if (currentLvl >= 40 && hasToolsForTier(FishingTier.CAGE_HARPOON)) {
             tier = FishingTier.CAGE_HARPOON;
-        } else if (currentLvl >= 20) {
+        } else if (currentLvl >= 20 && hasToolsForTier(FishingTier.LURE)) {
             tier = FishingTier.LURE;
+        } else if (hasToolsForTier(FishingTier.NET_BAIT)) {
+            tier = FishingTier.NET_BAIT;
         } else {
+            // Final fallback - use NET_BAIT tier even if tools aren't available
+            // The obtainTools method will try to get them
             tier = FishingTier.NET_BAIT;
         }
+    }
+
+    private boolean hasToolsForTier(FishingTier checkTier) {
+        switch (checkTier) {
+            case NET_BAIT:
+                return (Rs2Inventory.contains("Small fishing net") || canGetFromBank("Small fishing net"))
+                        || (Rs2Inventory.contains("Fishing rod") && Rs2Inventory.contains("Fishing bait"))
+                        || (canGetFromBank("Fishing rod") && canGetFromBank("Fishing bait"));
+            case LURE:
+                return (Rs2Inventory.contains("Fly fishing rod") && Rs2Inventory.contains("Feather"))
+                        || (canGetFromBank("Fly fishing rod") && canGetFromBank("Feather"));
+            case CAGE_HARPOON:
+                return Rs2Inventory.contains("Lobster pot") || Rs2Inventory.contains("Harpoon")
+                        || canGetFromBank("Lobster pot") || canGetFromBank("Harpoon");
+            default:
+                return false;
+        }
+    }
+
+    private boolean canGetFromBank(String itemName) {
+        // Only check bank if we're close to a bank to avoid unnecessary walking
+        if (currentSpot != null && currentSpot.bankLocation != null) {
+            WorldPoint bankLocation = currentSpot.bankLocation.getWorldPoint();
+            if (Rs2Player.getWorldLocation().distanceTo(bankLocation) <= 20) {
+                // We're close to bank, try to check if item is available
+                boolean wasOpen = Rs2Bank.isOpen();
+                if (!wasOpen && Rs2Bank.openBank()) {
+                    boolean hasItem = Rs2Bank.hasItem(itemName);
+                    if (!wasOpen) Rs2Bank.closeBank(); // Close if we opened it
+                    return hasItem;
+                }
+            }
+        }
+        return false; // Assume not available if we can't easily check
     }
 
     private void updateCurrentSpot() {

@@ -231,13 +231,16 @@ public interface AllInOneConfig extends Config {
     )
     String woodcuttingSection = "woodcuttingSection";
 
-    @ConfigItem(keyName = "wcMode", name = "Mode", description = "Powerdrop / Bank / Bird nest focus", section = woodcuttingSection, position = 0)
+    @ConfigItem(keyName = "wcMode", name = "Mode", description = "Powerdrop / Bank", section = woodcuttingSection, position = 0)
     default WoodcuttingMode wcMode() { return WoodcuttingMode.POWERDROP; }
 
-    @ConfigItem(keyName = "wcBirdNestPickup", name = "Pickup Nests", description = "Pak bird nests op", section = woodcuttingSection, position = 1)
+    @ConfigItem(keyName = "wcTreeType", name = "Tree Type", description = "Choose specific tree type or Auto for level-based progression", section = woodcuttingSection, position = 1)
+    default WoodcuttingTreeType wcTreeType() { return WoodcuttingTreeType.AUTO; }
+
+    @ConfigItem(keyName = "wcBirdNestPickup", name = "Pickup Nests", description = "Pak bird nests op", section = woodcuttingSection, position = 2)
     default boolean wcBirdNestPickup() { return true; }
 
-    @ConfigItem(keyName = "wcUseSpec", name = "Dragon Axe Spec", description = "Gebruik spec bij 100%", section = woodcuttingSection, position = 2)
+    @ConfigItem(keyName = "wcUseSpec", name = "Dragon Axe Spec", description = "Gebruik spec bij 100%", section = woodcuttingSection, position = 3)
     default boolean wcUseSpec() { return true; }
 
     @ConfigSection(
@@ -473,6 +476,7 @@ public interface AllInOneConfig extends Config {
     // Gathering
     enum MiningMode { POWERDROP, BANK }
     enum WoodcuttingMode { POWERDROP, BANK, NEST_FOCUS }
+    enum WoodcuttingTreeType { AUTO, TREE, OAK, WILLOW, TEAK, MAPLE, MAHOGANY, YEW, MAGIC, REDWOOD }
     enum FishingMode { POWERFISH, BANK }
     enum FishingMethod { AUTO, NET, BAIT, LURE, CAGE, HARPOON }
     enum HunterMethod { AUTO, BIRDS, CHINCHOMPA, SALAMANDER, HERBIBOAR }
@@ -490,7 +494,7 @@ public interface AllInOneConfig extends Config {
     enum RunecraftMethod { ABYSS, ALTAR_DIRECT, LAVA, GOTR, ZMI }
     enum ConstructionMethod { OAK_LARDER, OAK_DOOR, MAHOGANY_TABLE, GUILD_BENCH }
     enum SlayerTaskStrategy { BASIC, BLOCK_META, EXTEND_PREFERRED }
-    enum ThievingMethod { STALLS, CAKES, MASTER_FARMER, BLACKJACK, PYRAMID_PLUNDER }
-    enum AgilityCourseMode { AUTO, BEST_XP, GNOME, DRAYNOR, VARROCK, CANIFIS, APE_ATOLL, SEERS, POLLNIVNEACH, ARDY, RELLEKKA, PRIFDDINAS }
+    enum ThievingMethod { STALLS, KNIGHTS, ARDY, PYRAMID }
+    enum AgilityCourseMode { AUTO, BEST, SPECIFIC }
 
 }

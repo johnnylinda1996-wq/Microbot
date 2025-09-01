@@ -110,6 +110,7 @@ public class SkillSettingsRegistry {
 
         Set<String> wcFlags = new HashSet<>();
         if (bool(() -> config.wcBirdNestPickup())) wcFlags.add("PICKUP_NESTS");
+        wcFlags.add("WC_TREE_TYPE:" + config.wcTreeType().name());
         map.put(SkillType.WOODCUTTING, SkillRuntimeSettings.builder()
                 .skillType(SkillType.WOODCUTTING)
                 .enabled(true)
