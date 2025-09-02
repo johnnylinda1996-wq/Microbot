@@ -11,6 +11,7 @@ import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioMinigam
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioTravelTask; // NEW
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation; // NEW
 import net.runelite.api.coords.WorldPoint; // NEW
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.AllInOneConfig; // ADDED IMPORT
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -28,10 +29,9 @@ public class AllInOneBotGUI extends JFrame {
     private final AllInOneScript script;
     private final AllInOneConfig config; // NEW: Direct config access for method updates
 
-    // Theme Management
+    // Theme Management (removed LIGHT theme)
     private enum Theme {
         DARK("🌙 Dark Theme", new Color(32, 36, 40), new Color(45, 50, 56), Color.WHITE, new Color(220, 50, 50)),
-        LIGHT("☀️ Light Theme", new Color(245, 245, 245), new Color(255, 255, 255), Color.BLACK, new Color(180, 30, 30)),
         BLUE("💙 Blue Theme", new Color(25, 35, 45), new Color(35, 45, 60), Color.WHITE, new Color(100, 150, 255)),
         GREEN("💚 Green Theme", new Color(20, 40, 30), new Color(30, 50, 40), Color.WHITE, new Color(80, 200, 120)),
         RED("❤️ Red Theme", new Color(40, 20, 20), new Color(60, 30, 30), Color.WHITE, new Color(255, 100, 100));
@@ -41,7 +41,7 @@ public class AllInOneBotGUI extends JFrame {
         final Color panelBackground;
         final Color foreground;
         final Color accent;
-        final Color hoverColor; // New hover color for interactive elements
+        final Color hoverColor;
 
         Theme(String displayName, Color bg, Color panelBg, Color fg, Color accent) {
             this.displayName = displayName;
@@ -49,99 +49,9 @@ public class AllInOneBotGUI extends JFrame {
             this.panelBackground = panelBg;
             this.foreground = fg;
             this.accent = accent;
-            // Set hover color based on theme name
-            if ("🌙 Default Theme(dark)".equals(displayName)) {
-                this.hoverColor = new Color(255, 100, 100); // Light red hover for dark mode
-            } else if ("☀️ White Theme(light)".equals(displayName)) {
-                this.hoverColor = new Color(200, 60, 60); // Darker red hover for light mode
-            } else {
-                this.hoverColor = accent.brighter();
-            }
+            this.hoverColor = accent.brighter();
         }
     }
-
-    // Language support
-    private enum Language {
-        ENGLISH("English(default)", "en"),
-        DUTCH("Nederlands", "nl"),
-        GERMAN("Deutsch", "de"),
-        FRENCH("Français", "fr");
-
-        final String displayName;
-        final String code;
-
-        Language(String displayName, String code) {
-            this.displayName = displayName;
-            this.code = code;
-        }
-
-        // Translation methods
-        public String translate(String key) {
-            switch (this) {
-                case DUTCH:
-                    return translateDutch(key);
-                case GERMAN:
-                    return translateGerman(key);
-                case FRENCH:
-                    return translateFrench(key);
-                default:
-                    return key; // English as fallback
-            }
-        }
-
-        private String translateDutch(String key) {
-            switch (key) {
-                case "Skill Task": return "Vaardigheid Taak";
-                case "Quest Task": return "Quest Taak";
-                case "Minigame Task": return "Minispel Taak";
-                case "Target Level": return "Doelniveau";
-                case "Duration (min)": return "Duur (min)";
-                case "Add Skill Task": return "Voeg Vaardigheid Toe";
-                case "Add Quest Task": return "Voeg Quest Toe";
-                case "Add Minigame Task": return "Voeg Minispel Toe";
-                case "Start / Resume": return "Start / Hervat";
-                case "Pause": return "Pauze";
-                case "Resume": return "Hervat";
-                default: return key;
-            }
-        }
-
-        private String translateGerman(String key) {
-            switch (key) {
-                case "Skill Task": return "Fertigkeits-Aufgabe";
-                case "Quest Task": return "Quest-Aufgabe";
-                case "Minigame Task": return "Minispiel-Aufgabe";
-                case "Target Level": return "Ziellevel";
-                case "Duration (min)": return "Dauer (min)";
-                case "Add Skill Task": return "Fertigkeit hinzufügen";
-                case "Add Quest Task": return "Quest hinzufügen";
-                case "Add Minigame Task": return "Minispiel hinzufügen";
-                case "Start / Resume": return "Start / Fortsetzen";
-                case "Pause": return "Pause";
-                case "Resume": return "Fortsetzen";
-                default: return key;
-            }
-        }
-
-        private String translateFrench(String key) {
-            switch (key) {
-                case "Skill Task": return "Tâche de Compétence";
-                case "Quest Task": return "Tâche de Quête";
-                case "Minigame Task": return "Tâche de Mini-jeu";
-                case "Target Level": return "Niveau Cible";
-                case "Duration (min)": return "Dur������e (min)";
-                case "Add Skill Task": return "Ajouter Compétence";
-                case "Add Quest Task": return "Ajouter Quête";
-                case "Add Minigame Task": return "Ajouter Mini-jeu";
-                case "Start / Resume": return "Démarrer / Reprendre";
-                case "Pause": return "Pause";
-                case "Resume": return "Reprendre";
-                default: return key;
-            }
-        }
-    }
-
-    private Language currentLanguage = Language.ENGLISH;
 
     private Theme currentTheme = Theme.DARK;
     private Preferences prefs = Preferences.userNodeForPackage(AllInOneBotGUI.class);
@@ -153,6 +63,10 @@ public class AllInOneBotGUI extends JFrame {
     private boolean showStatusPanel = true;
     private boolean showControlPanel = true;
     private boolean compactMode = false;
+
+    // Position preservation variables
+    private boolean preserveLocation = true;
+    private Point originalLocation;
 
     private JComboBox<SkillType> skillCombo;
     private JSpinner targetLevelSpinner;
@@ -184,9 +98,10 @@ public class AllInOneBotGUI extends JFrame {
     // Added task counters
     private JLabel tasksSummaryLabel;
     // Filter
-    private JTextField filterField;
+    // private JTextField filterField;
 
     private final Timer uiTimer;
+    private final Timer queueRefreshTimer; // NEW: dedicated queue refresh timer
 
     private JRadioButton levelModeRadio;
     private JRadioButton timeModeRadio;
@@ -241,9 +156,14 @@ public class AllInOneBotGUI extends JFrame {
 
     private JMenuItem resetLayoutItemRef; // For translation if desired later
 
-    // Store original window position to prevent unwanted repositioning
-    private Point originalLocation;
-    private boolean preserveLocation = false;
+    // Store position to prevent unwanted repositioning
+    private Point savedLocation;
+    private boolean locationInitialized = false;
+
+    // ================== BEGIN MODIFICATIONS ==================
+    // Track last known window location to preserve position on any UI refresh/layout changes
+    private Point lastKnownLocation = null;
+    // ================== END MODIFICATIONS ==================
 
     public AllInOneBotGUI(AllInOneScript script) {
         super("🚀 Account Builder v0.1");
@@ -261,17 +181,16 @@ public class AllInOneBotGUI extends JFrame {
         applyThemeTweaks();
         refreshQueue();
 
-        // Store initial position and enable location preservation
         updateWindowSize();
         setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
 
-        // Set initial position but don't force it
+        // Set initial position
         setLocationRelativeTo(null);
 
-        // Store the location after initial setup
+        // Store location after everything is set up
         SwingUtilities.invokeLater(() -> {
-            originalLocation = getLocation();
-            preserveLocation = true;
+            savedLocation = getLocation();
+            locationInitialized = true;
         });
 
         setAlwaysOnTop(false);
@@ -279,6 +198,15 @@ public class AllInOneBotGUI extends JFrame {
 
         uiTimer = new Timer(1000, e -> refreshStatus());
         uiTimer.start();
+
+        // NEW: Dedicated queue refresh timer (every 6 seconds)
+        queueRefreshTimer = new Timer(6000, e -> refreshQueue());
+        queueRefreshTimer.start();
+
+        // Add listener to keep last known location updated
+        this.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override public void componentMoved(java.awt.event.ComponentEvent e) { lastKnownLocation = getLocation(); }
+        });
     }
 
     private void setCustomWindowIcon() {
@@ -337,10 +265,7 @@ public class AllInOneBotGUI extends JFrame {
         showControlPanel = prefs.getBoolean("showControlPanel", true);
         compactMode = prefs.getBoolean("compactMode", false);
 
-        String langCode = prefs.get("language", Language.ENGLISH.code);
-        for (Language l : Language.values()) {
-            if (l.code.equalsIgnoreCase(langCode)) { currentLanguage = l; break; }
-        }
+        // Language support removed
     }
 
     private void savePreferences() {
@@ -351,7 +276,7 @@ public class AllInOneBotGUI extends JFrame {
         prefs.putBoolean("showStatusPanel", showStatusPanel);
         prefs.putBoolean("showControlPanel", showControlPanel);
         prefs.putBoolean("compactMode", compactMode);
-        prefs.put("language", currentLanguage.code);
+        // Language support removed
     }
 
     private void createMenuBar() {
@@ -442,23 +367,6 @@ public class AllInOneBotGUI extends JFrame {
 
         appearanceMenu.add(layoutMenu);
 
-        // Language submenu
-        appearanceMenu.addSeparator();
-        languageMenuRef = new JMenu("Language");
-        ButtonGroup languageGroup = new ButtonGroup();
-        for (Language lang : Language.values()) {
-            JRadioButtonMenuItem langItem = new JRadioButtonMenuItem(lang.displayName);
-            langItem.setSelected(lang == currentLanguage);
-            langItem.addActionListener(e -> {
-                currentLanguage = lang;
-                applyLanguage();
-                savePreferences();
-            });
-            languageGroup.add(langItem);
-            languageMenuRef.add(langItem);
-        }
-        appearanceMenu.add(languageMenuRef);
-
         // Tools Menu
         JMenu toolsMenu = new JMenu("🔧 Tools");
 
@@ -494,12 +402,13 @@ public class AllInOneBotGUI extends JFrame {
     }
 
     private void updatePanelVisibility() {
+        Point currentPos = getLocation();
         layoutComponents();
-        applyLanguage();
         applyThemeTweaks();
         updateWindowSize();
         revalidate();
         repaint();
+        SwingUtilities.invokeLater(() -> setLocation(currentPos));
     }
 
     private void resetLayout() {
@@ -510,7 +419,6 @@ public class AllInOneBotGUI extends JFrame {
         showControlPanel = true;
         compactMode = false;
         currentTheme = Theme.DARK;
-        currentLanguage = Language.ENGLISH;
 
         taskList.setFixedCellHeight(compactMode ? 20 : 28);
         updatePanelVisibility();
@@ -778,7 +686,7 @@ public class AllInOneBotGUI extends JFrame {
 
         for (JLabel lab : labels) {
             if (lab != null) {
-                lab.setForeground(currentTheme == Theme.LIGHT ? Color.DARK_GRAY : Color.LIGHT_GRAY);
+                lab.setForeground(new Color(220,220,220));
             }
         }
 
@@ -798,12 +706,6 @@ public class AllInOneBotGUI extends JFrame {
                 spinner.getEditor().getComponent(0).setBackground(bgAlt);
                 spinner.getEditor().getComponent(0).setForeground(fgColor);
             }
-        }
-
-        // Apply filter field styling
-        if (filterField != null) {
-            filterField.setBackground(bgAlt);
-            filterField.setForeground(fgColor);
         }
 
         // Apply to radio buttons
@@ -1001,8 +903,6 @@ public class AllInOneBotGUI extends JFrame {
         progressBar.setStringPainted(true);
 
         tasksSummaryLabel = new JLabel("Tasks: 0");
-        filterField = new JTextField();
-        filterField.setToolTipText("Filter tasks (substring)");
         typeCountsLabel = new JLabel();
         typeCountsLabel.setForeground(new Color(200,200,200));
         typeCountsLabel.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -1024,6 +924,7 @@ public class AllInOneBotGUI extends JFrame {
 
         generateControlIcons();
         applyControlIcons();
+        shrinkControlButtons(); // ensure buttons shrink
         applyLanguage(); // initial language application
     }
 
@@ -1343,21 +1244,12 @@ public class AllInOneBotGUI extends JFrame {
         @Override
         public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             JLabel lbl = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-            // Theme adaptive colors
-            Color even, odd, sel, currentColor, baseFg;
-            if (currentTheme == Theme.LIGHT) {
-                even = new Color(245,245,245);
-                odd = new Color(235,235,235);
-                sel = new Color(200,230,255);
-                currentColor = new Color(220,250,220);
-                baseFg = Color.DARK_GRAY;
-            } else {
-                even = new Color(50,55,60);
-                odd = new Color(44,48,52);
-                sel = new Color(80,120,160);
-                currentColor = new Color(60,100,60);
-                baseFg = Color.WHITE;
-            }
+            // Simplified color scheme (single dark-oriented variant)
+            Color even = new Color(50,55,60);
+            Color odd = new Color(44,48,52);
+            Color sel = new Color(80,120,160);
+            Color currentColor = new Color(60,100,60);
+            Color baseFg = Color.WHITE;
             if (value instanceof TaskListEntry) {
                 TaskListEntry e = (TaskListEntry) value;
                 String base = e.displayText;
@@ -1367,8 +1259,7 @@ public class AllInOneBotGUI extends JFrame {
                 else if (e.type == AioTask.TaskType.QUEST) lbl.setIcon(QUEST_ICON);
                 else if (e.type == AioTask.TaskType.MINIGAME) {
                     Icon ic = MINIGAME_ICONS.get(e.minigameType); lbl.setIcon(ic != null ? ic : MINIGAME_FALLBACK_ICON);
-                } else if (e.type == AioTask.TaskType.TRAVEL) { // NEW travel icon
-                    // Attempt to find matching TravelLocation by display substring
+                } else if (e.type == AioTask.TaskType.TRAVEL) {
                     Icon tIcon = null;
                     for (Map.Entry<TravelLocation, Icon> en : TRAVEL_ICONS.entrySet()) {
                         if (e.displayText.toLowerCase().contains(en.getKey().getDisplayName().toLowerCase())) { tIcon = en.getValue(); break; }
@@ -1389,7 +1280,7 @@ public class AllInOneBotGUI extends JFrame {
                     lbl.setForeground(Color.BLACK);
                 }
                 lbl.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createMatteBorder(0,0,1,0,currentTheme == Theme.LIGHT ? new Color(210,210,210) : new Color(30,35,40)),
+                        BorderFactory.createMatteBorder(0,0,1,0,new Color(30,35,40)),
                         BorderFactory.createEmptyBorder(2,6,2,4)));
             }
             return lbl;
@@ -1462,18 +1353,15 @@ public class AllInOneBotGUI extends JFrame {
         return sel instanceof String && ((String) sel).startsWith("Custom");
     }
     private void setTravelCustomEnabled(boolean en) {
-        travelCombo.setEnabled(!en);
-        travelCombo.setSelectedItem(en ? "Custom" : null);
+        if (travelCombo != null) travelCombo.setEnabled(true);
     }
 
     private JPanel buildQueuePanel() {
         queuePanelRef = new JPanel(new BorderLayout());
         queuePanelRef.setBorder(new TitledBorder(translate("Queue")));
+        // Removed filter UI entirely per request
         JPanel top = new JPanel(new BorderLayout(4,4));
-        JLabel filterLbl = new JLabel(translate("Filter:"));
-        filterLbl.setPreferredSize(new Dimension(50, filterLbl.getPreferredSize().height));
-        top.add(filterLbl, BorderLayout.WEST);
-        top.add(filterField, BorderLayout.CENTER);
+        top.setOpaque(false);
         JPanel topRight = new JPanel(new BorderLayout());
         topRight.setOpaque(false);
         topRight.add(tasksSummaryLabel, BorderLayout.NORTH);
@@ -1483,19 +1371,14 @@ public class AllInOneBotGUI extends JFrame {
         taskList.setFixedCellHeight(compactMode ? 18 : 28);
         JScrollPane sp = new JScrollPane(taskList);
         queuePanelRef.add(sp, BorderLayout.CENTER);
-
-        // Reorganized button layout - place Load, Save, Refresh, Clear Queue above other buttons
+        // ...existing code for buttons (unchanged)...
         JPanel buttonArea = new JPanel(new BorderLayout());
-
-        // Top row: Load, Save, Refresh, Clear Queue
         JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 2));
         topButtons.add(loadButton);
         topButtons.add(saveButton);
         topButtons.add(refreshButton);
         topButtons.add(clearButton);
         buttonArea.add(topButtons, BorderLayout.NORTH);
-
-        // Bottom row: Remove selected, Edit, Arrow up, Arrow down, Shuffle
         JPanel bottomButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 2));
         bottomButtons.add(removeSelectedButton);
         bottomButtons.add(editSelectedButton);
@@ -1503,10 +1386,7 @@ public class AllInOneBotGUI extends JFrame {
         bottomButtons.add(moveDownButton);
         bottomButtons.add(shuffleButton);
         buttonArea.add(bottomButtons, BorderLayout.SOUTH);
-
         queuePanelRef.add(buttonArea, BorderLayout.SOUTH);
-
-        // Make the queue panel slightly wider to accommodate all buttons
         if (!compactMode) queuePanelRef.setPreferredSize(new Dimension(350, 380));
         else queuePanelRef.setPreferredSize(new Dimension(300, 320));
         return queuePanelRef;
@@ -1606,6 +1486,8 @@ public class AllInOneBotGUI extends JFrame {
         return wrap;
     }
 
+    // ================== BEGIN MODIFICATIONS ==================
+    // Preserve current position explicitly and avoid centering again
     private void updateWindowSize() {
         if (compactMode) {
             setMinimumSize(new Dimension(500, 400));
@@ -1613,8 +1495,9 @@ public class AllInOneBotGUI extends JFrame {
             setMinimumSize(new Dimension(820, 600));
         }
         pack();
-        setLocationRelativeTo(null);
+        if (lastKnownLocation != null) setLocation(lastKnownLocation); // restore
     }
+    // ================== END MODIFICATIONS ==================
 
     private void attachListeners() {
         addSkillButton.addActionListener(e -> {
@@ -1624,6 +1507,7 @@ public class AllInOneBotGUI extends JFrame {
             }
 
             SkillType st = (SkillType) skillCombo.getSelectedItem();
+            if (st == null) return; // null guard
 
             // NEW: Show skill-specific config popup before adding task
             if (showSkillConfigDialog(st)) {
@@ -1676,18 +1560,23 @@ public class AllInOneBotGUI extends JFrame {
             }
         });
 
-        addTravelButton.addActionListener(e -> { // NEW travel listener
+        addTravelButton.addActionListener(e -> { // NEW travel listener modified: keep combo enabled after custom
             if (preserveLocation) originalLocation = getLocation();
             Object sel = travelCombo.getSelectedItem();
+            boolean wasCustom = false;
             if (sel instanceof TravelLocation) {
                 script.addTravelTask((TravelLocation) sel);
             } else if (sel instanceof String && ((String) sel).startsWith("Custom")) {
+                wasCustom = true;
                 TravelCustomResult r = showCustomTravelDialog();
                 if (r != null) script.addTravelTaskCustom(r.name, new WorldPoint(r.x, r.y, r.z));
-            } else {
-                // Ignore separator rows
             }
             refreshQueue();
+            // Re-enable and reset selection if custom was chosen so user can pick normal locations again
+            travelCombo.setEnabled(true);
+            if (wasCustom && travelCombo.getItemCount() > 1) {
+                travelCombo.setSelectedIndex(1); // first actual entry after F2P header
+            }
             if (preserveLocation && originalLocation != null) SwingUtilities.invokeLater(() -> setLocation(originalLocation));
         });
 
@@ -1761,13 +1650,6 @@ public class AllInOneBotGUI extends JFrame {
             refreshQueue();
         });
 
-        // Filter listener
-        filterField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { refreshQueue(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { refreshQueue(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { refreshQueue(); }
-        });
-
         // Double click edit
         taskList.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
@@ -1794,31 +1676,28 @@ public class AllInOneBotGUI extends JFrame {
     }
 
     private void refreshQueue() {
+        Point keep = getLocation(); // preserve position
         taskModel.clear();
-        String filter = filterField.getText();
-        if (filter != null) filter = filter.trim().toLowerCase();
         AioTask cur = script.getCurrentTask();
         if (cur != null && !cur.isComplete()) taskModel.addElement(buildEntryCurrent(cur));
         java.util.List<AioTask> raw = script.getQueueSnapshotRaw();
         int number = 1;
-        int skillCount=0, questCount=0, miniCount=0, travelCount=0; // UPDATED add travelCount
+        int skillCount=0, questCount=0, miniCount=0, travelCount=0;
         for (AioTask t : raw) {
-            if (t.getType() == AioTask.TaskType.SKILL) skillCount++;
-            else if (t.getType()==AioTask.TaskType.QUEST) questCount++;
-            else if (t.getType()==AioTask.TaskType.MINIGAME) miniCount++;
-            else if (t.getType()==AioTask.TaskType.TRAVEL) travelCount++; // NEW
+            if (t.getType() == AioTask.TaskType.SKILL) skillCount++; else if (t.getType()==AioTask.TaskType.QUEST) questCount++; else if (t.getType()==AioTask.TaskType.MINIGAME) miniCount++; else if (t.getType()==AioTask.TaskType.TRAVEL) travelCount++;
             TaskListEntry e = buildEntry(t, number);
-            if (filter == null || filter.isEmpty() || e.displayText.toLowerCase().contains(filter)) {
-                taskModel.addElement(e);
-            }
+            taskModel.addElement(e);
             number++;
         }
         tasksSummaryLabel.setText("Tasks: " + raw.size());
-        typeCountsLabel.setText("<html><span style='color:#6fa8dc'>Skills: " + skillCount + "</span> | <span style='color:#f1c232'>Quests: " + questCount + "</span> | <span style='color:#b4a7d6'>Minigames: " + miniCount + "</span> | <span style='color:#93c47d'>Travel: " + travelCount + "</span></html>"); // UPDATED
+        typeCountsLabel.setText("<html><span style='color:#6fa8dc'>Skills: " + skillCount + "</span> | <span style='color:#f1c232'>Quests: " + questCount + "</span> | <span style='color:#b4a7d6'>Minigames: " + miniCount + "</span> | <span style='color:#93c47d'>Travel: " + travelCount + "</span></html>");
         taskList.repaint();
-
-        // Adjust preferred size when queue changes (auto sizing)
-        SwingUtilities.invokeLater(this::updateWindowSize);
+        // Do NOT resize or reposition window on periodic refresh
+        if (lastKnownLocation != null) {
+            SwingUtilities.invokeLater(() -> setLocation(lastKnownLocation));
+        } else {
+            SwingUtilities.invokeLater(() -> setLocation(keep));
+        }
     }
 
     private void refreshStatus() {
@@ -2152,12 +2031,15 @@ public class AllInOneBotGUI extends JFrame {
         toFront();
     }
 
+    // ================== BEGIN MODIFICATIONS ==================
+    // Fix syntax error in toUnderlyingQueueIndex
     private int toUnderlyingQueueIndex(int listIndex) {
         if (listIndex < 0) return -1;
         TaskListEntry e = taskModel.get(listIndex);
         if (e.isCurrent) return -1;
         return e.number - 1;
     }
+    // ================== END MODIFICATIONS ==================
 
     private void selectByQueueIndex(int qIndex) {
         for (int i=0;i<taskModel.size();i++) {
@@ -2263,663 +2145,58 @@ public class AllInOneBotGUI extends JFrame {
         boolean isCurrent;
     }
 
-    private String translate(String key) {
-        return currentLanguage.translate(key);
-    }
+    // ================== BEGIN MODIFICATIONS ==================
+    // Removed language system: ensure translate() is identity and drop language state
+    private String translate(String key) { return key; }
+    // ================== END MODIFICATIONS ==================
 
     private void applyLanguage() {
-        if (addSkillButton != null) addSkillButton.setText(translate("Add Skill Task"));
-        if (addQuestButton != null) addQuestButton.setText(translate("Add Quest Task"));
-        if (addMinigameButton != null) addMinigameButton.setText(translate("Add Minigame Task"));
-        if (addTravelButton != null) addTravelButton.setText(translate("Add Travel Task")); // NEW
-        if (removeSelectedButton != null) removeSelectedButton.setText(translate("Remove Selected"));
-        if (startButton != null) startButton.setText(translate("Start / Resume"));
-        if (pauseButton != null) pauseButton.setText(translate(script.isPaused()?"Resume":"Pause"));
-        if (clearButton != null) clearButton.setText(translate("Clear Queue"));
-        if (refreshButton != null) refreshButton.setText(translate("Refresh"));
-        if (skipButton != null) skipButton.setText(translate("Skip Current"));
-        if (hideButton != null) hideButton.setText(translate("Hide"));
-        if (saveButton != null) saveButton.setText(translate("Save"));
-        if (loadButton != null) loadButton.setText(translate("Load"));
-        if (shuffleButton != null) shuffleButton.setText(translate("Shuffle"));
-        if (editSelectedButton != null) editSelectedButton.setText(translate("Edit"));
-        if (moveUpButton != null) moveUpButton.setToolTipText(translate("Move Up"));
-        if (moveDownButton != null) moveDownButton.setToolTipText(translate("Move Down"));
-        if (levelModeRadio != null) levelModeRadio.setText(translate("Target Level"));
-        if (timeModeRadio != null) timeModeRadio.setText(translate("Duration (min)"));
-
+        if (addSkillButton != null) addSkillButton.setText("Add Skill Task");
+        if (addQuestButton != null) addQuestButton.setText("Add Quest Task");
+        if (addMinigameButton != null) addMinigameButton.setText("Add Minigame Task");
+        if (addTravelButton != null) addTravelButton.setText("Add Travel Task");
+        if (removeSelectedButton != null) removeSelectedButton.setText("Remove Selected");
+        if (startButton != null) startButton.setText("Start / Resume");
+        if (pauseButton != null) pauseButton.setText(script.isPaused()?"Resume":"Pause");
+        if (clearButton != null) clearButton.setText("Clear Queue");
+        if (refreshButton != null) refreshButton.setText("Refresh");
+        if (skipButton != null) skipButton.setText("Skip Current");
+        if (hideButton != null) hideButton.setText("Hide");
+        if (saveButton != null) saveButton.setText("Save");
+        if (loadButton != null) loadButton.setText("Load");
+        if (shuffleButton != null) shuffleButton.setText("Shuffle");
+        if (editSelectedButton != null) editSelectedButton.setText("Edit");
+        if (moveUpButton != null) moveUpButton.setToolTipText("Move Up");
+        if (moveDownButton != null) moveDownButton.setToolTipText("Move Down");
+        if (levelModeRadio != null) levelModeRadio.setText("Target Level");
+        if (timeModeRadio != null) timeModeRadio.setText("Duration (min)");
         updatePanelBorder(skillPanelRef, "Skill Task");
         updatePanelBorder(questPanelRef, "Quest Task");
         updatePanelBorder(minigamePanelRef, "Minigame Task");
         updatePanelBorder(queuePanelRef, "Queue");
         updatePanelBorder(controlPanelRef, "Control");
         updatePanelBorder(statusPanelRef, "Status");
-        updatePanelBorder(travelPanelRef, "Travel Task"); // NEW
+        updatePanelBorder(travelPanelRef, "Travel Task");
+    }
 
-        repaint();
+    // NEW helper to shrink control buttons
+    private void shrinkControlButtons() {
+        JButton[] arr = { startButton, pauseButton, skipButton, hideButton };
+        for (JButton b : arr) {
+            if (b == null) continue;
+            Dimension d = b.getPreferredSize();
+            int w = Math.max(60, d.width / 2);
+            int h = Math.max(18, d.height / 2);
+            b.setPreferredSize(new Dimension(w, h));
+            b.setMargin(new Insets(2,4,2,4));
+            b.setFont(b.getFont().deriveFont(Math.max(10f, b.getFont().getSize2D() - 1f)));
+        }
     }
 
     private void updatePanelBorder(JComponent comp, String key) {
         if (comp == null) return;
         if (comp.getBorder() instanceof TitledBorder) {
             ((TitledBorder)comp.getBorder()).setTitle(translate(key));
-        }
-    }
-
-    private void updateTrainingMethods() {
-        SkillType selectedSkill = (SkillType) skillCombo.getSelectedItem();
-        if (selectedSkill == null) return;
-
-        trainingMethodCombo.removeAllItems();
-
-        switch (selectedSkill) {
-            case ATTACK:
-            case STRENGTH:
-            case DEFENCE:
-                for (AllInOneConfig.CombatStyle style : AllInOneConfig.CombatStyle.values()) {
-                    trainingMethodCombo.addItem(style);
-                }
-                break;
-
-            case RANGED:
-                trainingMethodCombo.addItem("Iron arrows");
-                trainingMethodCombo.addItem("Steel arrows");
-                trainingMethodCombo.addItem("Mithril arrows");
-                trainingMethodCombo.addItem("Adamant arrows");
-                trainingMethodCombo.addItem("Rune arrows");
-                trainingMethodCombo.addItem("Dragon arrows");
-                break;
-
-            case MAGIC:
-                for (AllInOneConfig.MagicMethod method : AllInOneConfig.MagicMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case PRAYER:
-                for (AllInOneConfig.PrayerMethod method : AllInOneConfig.PrayerMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case MINING:
-                for (AllInOneConfig.GatheringMode mode : AllInOneConfig.GatheringMode.values()) {
-                    trainingMethodCombo.addItem(mode);
-                }
-                break;
-
-            case SMITHING:
-                for (AllInOneConfig.SmithingMethod method : AllInOneConfig.SmithingMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case FISHING:
-                for (AllInOneConfig.FishingMethod method : AllInOneConfig.FishingMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case COOKING:
-                for (AllInOneConfig.CookingLocation location : AllInOneConfig.CookingLocation.values()) {
-                    trainingMethodCombo.addItem(location);
-                }
-                break;
-
-            case FIREMAKING:
-                for (AllInOneConfig.LogType logType : AllInOneConfig.LogType.values()) {
-                    trainingMethodCombo.addItem(logType);
-                }
-                break;
-
-            case WOODCUTTING:
-                for (AllInOneConfig.TreeType treeType : AllInOneConfig.TreeType.values()) {
-                    trainingMethodCombo.addItem(treeType);
-                }
-                break;
-
-            case CRAFTING:
-                for (AllInOneConfig.CraftingMethod method : AllInOneConfig.CraftingMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case FLETCHING:
-                for (AllInOneConfig.FletchingMethod method : AllInOneConfig.FletchingMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case HERBLORE:
-                for (AllInOneConfig.HerbloreMethod method : AllInOneConfig.HerbloreMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case RUNECRAFTING:
-                for (AllInOneConfig.RunecraftingMethod method : AllInOneConfig.RunecraftingMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case CONSTRUCTION:
-                for (AllInOneConfig.ConstructionMethod method : AllInOneConfig.ConstructionMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case AGILITY:
-                for (AllInOneConfig.AgilityCourse course : AllInOneConfig.AgilityCourse.values()) {
-                    trainingMethodCombo.addItem(course);
-                }
-                break;
-
-            case THIEVING:
-                for (AllInOneConfig.ThievingMethod method : AllInOneConfig.ThievingMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case SLAYER:
-                for (AllInOneConfig.SlayerStrategy strategy : AllInOneConfig.SlayerStrategy.values()) {
-                    trainingMethodCombo.addItem(strategy);
-                }
-                break;
-
-            case HUNTER:
-                for (AllInOneConfig.HunterMethod method : AllInOneConfig.HunterMethod.values()) {
-                    trainingMethodCombo.addItem(method);
-                }
-                break;
-
-            case FARMING:
-                for (AllInOneConfig.FarmingRunType runType : AllInOneConfig.FarmingRunType.values()) {
-                    trainingMethodCombo.addItem(runType);
-                }
-                break;
-
-            case HITPOINTS:
-                trainingMethodCombo.addItem("Combat");
-                trainingMethodCombo.addItem("Safe Spotting");
-                trainingMethodCombo.addItem("Pest Control");
-                break;
-
-            default:
-                trainingMethodCombo.addItem("Auto");
-                break;
-        }
-
-        loadCurrentMethodSelection(selectedSkill);
-    }
-
-    private void loadCurrentMethodSelection(SkillType skill) {
-        try {
-            Object currentMethod = getCurrentConfigMethod(skill);
-            if (currentMethod != null) {
-                for (int i = 0; i < trainingMethodCombo.getItemCount(); i++) {
-                    Object item = trainingMethodCombo.getItemAt(i);
-                    if (item.toString().equals(currentMethod.toString()) ||
-                            (item instanceof Enum && currentMethod instanceof Enum &&
-                                    ((Enum<?>) item).name().equals(((Enum<?>) currentMethod).name()))) {
-                        trainingMethodCombo.setSelectedIndex(i);
-                        break;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("Failed to load current method for " + skill + ": " + e.getMessage());
-        }
-    }
-
-    private Object getCurrentConfigMethod(SkillType skill) {
-        switch (skill) {
-            case ATTACK: return config.attackStyle();
-            case STRENGTH: return config.strengthStyle();
-            case DEFENCE: return config.defenceStyle();
-            case RANGED: return config.rangedAmmo();
-            case MAGIC: return config.magicMethod();
-            case PRAYER: return config.prayerMethod();
-            case MINING: return config.miningMode();
-            case SMITHING: return config.smithingMethod();
-            case FISHING: return config.fishingMethod();
-            case COOKING: return config.cookingLocation();
-            case FIREMAKING: return config.firemakingLogs();
-            case WOODCUTTING: return config.woodcuttingTrees();
-            case CRAFTING: return config.craftingMethod();
-            case FLETCHING: return config.fletchingMethod();
-            case HERBLORE: return config.herbloreMethod();
-            case RUNECRAFTING: return config.runecraftingMethod();
-            case CONSTRUCTION: return config.constructionMethod();
-            case AGILITY: return config.agilityCourse();
-            case THIEVING: return config.thievingMethod();
-            case SLAYER: return config.slayerStrategy();
-            case HUNTER: return config.hunterMethod();
-            case FARMING: return config.farmingRunType();
-            case HITPOINTS: return config.hitpointsMethod();
-            default: return "Auto";
-        }
-    }
-
-    private void updateSkillMethodConfig() {
-        SkillType selectedSkill = (SkillType) skillCombo.getSelectedItem();
-        Object selectedMethod = trainingMethodCombo.getSelectedItem();
-
-        if (selectedSkill == null || selectedMethod == null) return;
-
-        try {
-            System.out.println("Updated " + selectedSkill.getDisplayName() + " method to: " + selectedMethod);
-        } catch (Exception e) {
-            System.out.println("Failed to update config for " + selectedSkill + ": " + e.getMessage());
-        }
-    }
-
-    private boolean showSkillConfigDialog(SkillType skillType) {
-        JDialog dialog = new JDialog(this, "Configure " + skillType.getDisplayName(), true);
-        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-
-        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-
-        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
-        Icon skillIcon = SKILL_ICONS.get(skillType);
-        if (skillIcon != null) {
-            JLabel iconLabel = new JLabel(skillIcon);
-            titlePanel.add(iconLabel);
-        }
-        JLabel titleLabel = new JLabel("Configure " + skillType.getDisplayName() + " Training");
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
-        titlePanel.add(titleLabel);
-        mainPanel.add(titlePanel, BorderLayout.NORTH);
-
-        JPanel configPanel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.anchor = GridBagConstraints.WEST;
-
-        gbc.gridx = 0; gbc.gridy = 0;
-        configPanel.add(new JLabel("Training Method:"), gbc);
-
-        JComboBox<Object> methodCombo = new JComboBox<>();
-        populateMethodCombo(methodCombo, skillType);
-        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-        configPanel.add(methodCombo, gbc);
-
-        Map<String, JComponent> additionalComponents = new HashMap<>();
-        addSkillSpecificOptions(skillType, configPanel, additionalComponents, gbc);
-
-        mainPanel.add(configPanel, BorderLayout.CENTER);
-
-        JPanel buttonPanel = new JPanel(new FlowLayout());
-        JButton okButton = new JButton("OK");
-        JButton cancelButton = new JButton("Cancel");
-
-        final boolean[] result = {false};
-
-        okButton.addActionListener(e -> {
-            updateConfigFromDialog(skillType, methodCombo, additionalComponents);
-            result[0] = true;
-            dialog.dispose();
-        });
-
-        cancelButton.addActionListener(e -> {
-            result[0] = false;
-            dialog.dispose();
-        });
-
-        buttonPanel.add(okButton);
-        buttonPanel.add(cancelButton);
-        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
-
-        dialog.add(mainPanel);
-        dialog.pack();
-        dialog.setLocationRelativeTo(this);
-
-        applyDialogTheme(dialog);
-
-        dialog.setVisible(true);
-        return result[0];
-    }
-
-    private void populateMethodCombo(JComboBox<Object> combo, SkillType skillType) {
-        switch (skillType) {
-            case ATTACK:
-            case STRENGTH:
-            case DEFENCE:
-                for (AllInOneConfig.CombatStyle style : AllInOneConfig.CombatStyle.values()) {
-                    combo.addItem(style);
-                }
-                break;
-            case RANGED:
-                combo.addItem("Iron arrows");
-                combo.addItem("Steel arrows");
-                combo.addItem("Mithril arrows");
-                combo.addItem("Adamant arrows");
-                combo.addItem("Rune arrows");
-                combo.addItem("Dragon arrows");
-                break;
-            case MAGIC:
-                for (AllInOneConfig.MagicMethod method : AllInOneConfig.MagicMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case PRAYER:
-                for (AllInOneConfig.PrayerMethod method : AllInOneConfig.PrayerMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case MINING:
-                for (AllInOneConfig.GatheringMode mode : AllInOneConfig.GatheringMode.values()) {
-                    combo.addItem(mode);
-                }
-                break;
-            case SMITHING:
-                for (AllInOneConfig.SmithingMethod method : AllInOneConfig.SmithingMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case FISHING:
-                for (AllInOneConfig.FishingMethod method : AllInOneConfig.FishingMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case COOKING:
-                for (AllInOneConfig.CookingLocation location : AllInOneConfig.CookingLocation.values()) {
-                    combo.addItem(location);
-                }
-                break;
-            case FIREMAKING:
-                for (AllInOneConfig.LogType logType : AllInOneConfig.LogType.values()) {
-                    combo.addItem(logType);
-                }
-                break;
-            case WOODCUTTING:
-                for (AllInOneConfig.TreeType treeType : AllInOneConfig.TreeType.values()) {
-                    combo.addItem(treeType);
-                }
-                break;
-            case CRAFTING:
-                for (AllInOneConfig.CraftingMethod method : AllInOneConfig.CraftingMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case FLETCHING:
-                for (AllInOneConfig.FletchingMethod method : AllInOneConfig.FletchingMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case HERBLORE:
-                for (AllInOneConfig.HerbloreMethod method : AllInOneConfig.HerbloreMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case RUNECRAFTING:
-                for (AllInOneConfig.RunecraftingMethod method : AllInOneConfig.RunecraftingMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case CONSTRUCTION:
-                for (AllInOneConfig.ConstructionMethod method : AllInOneConfig.ConstructionMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case AGILITY:
-                for (AllInOneConfig.AgilityCourse course : AllInOneConfig.AgilityCourse.values()) {
-                    combo.addItem(course);
-                }
-                break;
-            case THIEVING:
-                for (AllInOneConfig.ThievingMethod method : AllInOneConfig.ThievingMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case SLAYER:
-                for (AllInOneConfig.SlayerStrategy strategy : AllInOneConfig.SlayerStrategy.values()) {
-                    combo.addItem(strategy);
-                }
-                break;
-            case HUNTER:
-                for (AllInOneConfig.HunterMethod method : AllInOneConfig.HunterMethod.values()) {
-                    combo.addItem(method);
-                }
-                break;
-            case FARMING:
-                for (AllInOneConfig.FarmingRunType runType : AllInOneConfig.FarmingRunType.values()) {
-                    combo.addItem(runType);
-                }
-                break;
-            case HITPOINTS:
-                combo.addItem("Combat");
-                combo.addItem("Safe Spotting");
-                combo.addItem("Pest Control");
-                break;
-            default:
-                combo.addItem("Auto");
-                break;
-        }
-
-        try {
-            Object currentMethod = getCurrentConfigMethod(skillType);
-            if (currentMethod != null) {
-                for (int i = 0; i < combo.getItemCount(); i++) {
-                    Object item = combo.getItemAt(i);
-                    if (item.toString().equals(currentMethod.toString()) ||
-                            (item instanceof Enum && currentMethod instanceof Enum &&
-                                    ((Enum<?>) item).name().equals(((Enum<?>) currentMethod).name()))) {
-                        combo.setSelectedIndex(i);
-                        break;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Use default selection
-        }
-    }
-
-    private void addSkillSpecificOptions(SkillType skillType, JPanel configPanel,
-                                         Map<String, JComponent> components, GridBagConstraints gbc) {
-        gbc.gridy++;
-
-        switch (skillType) {
-            case ATTACK:
-            case STRENGTH:
-            case DEFENCE:
-                gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE;
-                configPanel.add(new JLabel("Food HP %:"), gbc);
-                JSpinner foodHpSpinner = new JSpinner(new SpinnerNumberModel(40, 10, 90, 5));
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(foodHpSpinner, gbc);
-                components.put("foodHP", foodHpSpinner);
-
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox useSpecCheckBox = new JCheckBox("Use Special Attack");
-                configPanel.add(useSpecCheckBox, gbc);
-                components.put("useSpec", useSpecCheckBox);
-                break;
-
-            case RANGED:
-                gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
-                configPanel.add(new JLabel("Food HP %:"), gbc);
-                JSpinner rangedFoodSpinner = new JSpinner(new SpinnerNumberModel(50, 10, 90, 5));
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(rangedFoodSpinner, gbc);
-                components.put("foodHP", rangedFoodSpinner);
-
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox rangedSpecCheckBox = new JCheckBox("Use Special Attack");
-                configPanel.add(rangedSpecCheckBox, gbc);
-                components.put("useSpec", rangedSpecCheckBox);
-                break;
-
-            case MAGIC:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox splashCheckBox = new JCheckBox("Splash Protection");
-                splashCheckBox.setSelected(config.magicSplashProtection());
-                configPanel.add(splashCheckBox, gbc);
-                components.put("splashProtection", splashCheckBox);
-                break;
-
-            case MINING:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox tickMiningCheckBox = new JCheckBox("3-Tick Mining");
-                tickMiningCheckBox.setSelected(config.mining3Tick());
-                configPanel.add(tickMiningCheckBox, gbc);
-                components.put("3tick", tickMiningCheckBox);
-
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
-                configPanel.add(new JLabel("Ore Types:"), gbc);
-                JTextField oresField = new JTextField(config.miningOres());
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(oresField, gbc);
-                components.put("ores", oresField);
-                break;
-
-            case FISHING:
-                // Training mode (bank vs drop)
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
-                configPanel.add(new JLabel("Training Mode:"), gbc);
-                JComboBox<AllInOneConfig.GatheringMode> fishingModeCombo = new JComboBox<>(AllInOneConfig.GatheringMode.values());
-                fishingModeCombo.setSelectedItem(config.fishingMode());
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(fishingModeCombo, gbc);
-                components.put("fishingMode", fishingModeCombo);
-
-                // Fishing method
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
-                configPanel.add(new JLabel("Fishing Method:"), gbc);
-                JComboBox<AllInOneConfig.FishingMethod> fishingMethodCombo = new JComboBox<>(AllInOneConfig.FishingMethod.values());
-                fishingMethodCombo.setSelectedItem(config.fishingMethod());
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(fishingMethodCombo, gbc);
-                components.put("fishingMethod", fishingMethodCombo);
-
-                // Use special attack
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox fishingSpecCheckBox = new JCheckBox("Use Harpoon Special");
-                fishingSpecCheckBox.setSelected(config.fishingSpecial());
-                configPanel.add(fishingSpecCheckBox, gbc);
-                components.put("useSpec", fishingSpecCheckBox);
-                break;
-
-            case COOKING:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox gauntletsCheckBox = new JCheckBox("Use Cooking Gauntlets");
-                gauntletsCheckBox.setSelected(config.cookingGauntlets());
-                configPanel.add(gauntletsCheckBox, gbc);
-                components.put("gauntlets", gauntletsCheckBox);
-                break;
-
-            case WOODCUTTING:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox nestsCheckBox = new JCheckBox("Collect Bird Nests");
-                nestsCheckBox.setSelected(config.woodcuttingNests());
-                configPanel.add(nestsCheckBox, gbc);
-                components.put("nests", nestsCheckBox);
-
-                gbc.gridy++;
-                JCheckBox axeSpecCheckBox = new JCheckBox("Use Dragon Axe Special");
-                axeSpecCheckBox.setSelected(config.woodcuttingSpecial());
-                configPanel.add(axeSpecCheckBox, gbc);
-                components.put("useSpec", axeSpecCheckBox);
-                break;
-
-            case AGILITY:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox staminaCheckBox = new JCheckBox("Use Stamina Potions");
-                staminaCheckBox.setSelected(config.agilityStamina());
-                configPanel.add(staminaCheckBox, gbc);
-                components.put("stamina", staminaCheckBox);
-
-                gbc.gridy++;
-                JCheckBox marksCheckBox = new JCheckBox("Collect Marks of Grace");
-                marksCheckBox.setSelected(config.agilityMarks());
-                configPanel.add(marksCheckBox, gbc);
-                components.put("marks", marksCheckBox);
-                break;
-
-            case THIEVING:
-                gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
-                configPanel.add(new JLabel("Food HP %:"), gbc);
-                JSpinner thievingFoodSpinner = new JSpinner(new SpinnerNumberModel(40, 10, 90, 5));
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(thievingFoodSpinner, gbc);
-                components.put("foodHP", thievingFoodSpinner);
-
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox dodgyCheckBox = new JCheckBox("Use Dodgy Necklace");
-                dodgyCheckBox.setSelected(config.thievingDodgy());
-                configPanel.add(dodgyCheckBox, gbc);
-                components.put("dodgy", dodgyCheckBox);
-                break;
-
-            case SLAYER:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox cannonCheckBox = new JCheckBox("Use Dwarf Cannon");
-                cannonCheckBox.setSelected(config.slayerCannon());
-                configPanel.add(cannonCheckBox, gbc);
-                components.put("cannon", cannonCheckBox);
-                break;
-
-            case HUNTER:
-                gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
-                configPanel.add(new JLabel("Trap Count:"), gbc);
-                JSpinner trapSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 5, 1));
-                trapSpinner.setValue(config.hunterTraps());
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(trapSpinner, gbc);
-                components.put("traps", trapSpinner);
-
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox relayCheckBox = new JCheckBox("Auto Trap Replacement");
-                relayCheckBox.setSelected(config.hunterRelay());
-                configPanel.add(relayCheckBox, gbc);
-                components.put("relay", relayCheckBox);
-                break;
-
-            case FARMING:
-                gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
-                configPanel.add(new JLabel("Compost Type:"), gbc);
-                JComboBox<AllInOneConfig.CompostType> compostCombo = new JComboBox<>(AllInOneConfig.CompostType.values());
-                compostCombo.setSelectedItem(config.farmingCompost());
-                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-                configPanel.add(compostCombo, gbc);
-                components.put("compost", compostCombo);
-
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox birdhousesCheckBox = new JCheckBox("Include Birdhouses");
-                birdhousesCheckBox.setSelected(config.farmingBirdhouses());
-                configPanel.add(birdhousesCheckBox, gbc);
-                components.put("birdhouses", birdhousesCheckBox);
-                break;
-
-            case CONSTRUCTION:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox servantCheckBox = new JCheckBox("Use Servant");
-                servantCheckBox.setSelected(config.constructionServant());
-                configPanel.add(servantCheckBox, gbc);
-                components.put("servant", servantCheckBox);
-                break;
-
-            case HERBLORE:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox secondariesCheckBox = new JCheckBox("Use Secondary Ingredients");
-                secondariesCheckBox.setSelected(config.herbloreSecondaries());
-                configPanel.add(secondariesCheckBox, gbc);
-                components.put("secondaries", secondariesCheckBox);
-                break;
-
-            case RUNECRAFTING:
-                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-                JCheckBox pouchesCheckBox = new JCheckBox("Use Essence Pouches");
-                pouchesCheckBox.setSelected(config.runecraftingPouches());
-                configPanel.add(pouchesCheckBox, gbc);
-                components.put("pouches", pouchesCheckBox);
-
-                gbc.gridy++;
-                JCheckBox repairCheckBox = new JCheckBox("Repair Pouches");
-                repairCheckBox.setSelected(config.runecraftingRepair());
-                configPanel.add(repairCheckBox, gbc);
-                components.put("repair", repairCheckBox);
-                break;
         }
     }
 
@@ -3038,6 +2315,13 @@ public class AllInOneBotGUI extends JFrame {
                     if (components.containsKey("ores")) {
                         JTextField textField = (JTextField) components.get("ores");
                         configManager.setConfiguration(configGroup, "miningOres", textField.getText());
+                    }
+                    break;
+
+                case SMITHING:
+                    if (components.containsKey("bars")) {
+                        JTextField textField = (JTextField) components.get("bars");
+                        configManager.setConfiguration(configGroup, "smithingBars", textField.getText());
                     }
                     break;
 
@@ -3179,4 +2463,181 @@ public class AllInOneBotGUI extends JFrame {
         if (remMin == 0) return days + "d " + remHours + "h";
         return days + "d " + remHours + "h " + remMin + "m";
     }
+
+    // ================== BEGIN ADDED METHODS (compile helpers) ==================
+    private void updateTrainingMethods() {
+        if (trainingMethodCombo == null) return;
+        SkillType selectedSkill = (SkillType) skillCombo.getSelectedItem();
+        trainingMethodCombo.removeAllItems();
+        if (selectedSkill == null) return;
+        populateMethodCombo(trainingMethodCombo, selectedSkill);
+        loadCurrentMethodSelection(selectedSkill);
+    }
+
+    private Object getCurrentConfigMethod(SkillType skill) {
+        if (config == null || skill == null) return null;
+        switch (skill) {
+            case ATTACK: return config.attackStyle();
+            case STRENGTH: return config.strengthStyle();
+            case DEFENCE: return config.defenceStyle();
+            case RANGED: return config.rangedAmmo();
+            case MAGIC: return config.magicMethod();
+            case PRAYER: return config.prayerMethod();
+            case MINING: return config.miningMode();
+            case SMITHING: return config.smithingMethod();
+            case FISHING: return config.fishingMethod();
+            case COOKING: return config.cookingLocation();
+            case FIREMAKING: return config.firemakingLogs();
+            case WOODCUTTING: return config.woodcuttingTrees();
+            case CRAFTING: return config.craftingMethod();
+            case FLETCHING: return config.fletchingMethod();
+            case HERBLORE: return config.herbloreMethod();
+            case RUNECRAFTING: return config.runecraftingMethod();
+            case CONSTRUCTION: return config.constructionMethod();
+            case AGILITY: return config.agilityCourse();
+            case THIEVING: return config.thievingMethod();
+            case SLAYER: return config.slayerStrategy();
+            case HUNTER: return config.hunterMethod();
+            case FARMING: return config.farmingRunType();
+            case HITPOINTS: return config.hitpointsMethod();
+            default: return null;
+        }
+    }
+
+    private void loadCurrentMethodSelection(SkillType skill) {
+        Object current = getCurrentConfigMethod(skill);
+        if (current == null) return;
+    }
+    // ================== END ADDED METHODS ==================
+
+    // ================== RE-ADDED MISSING METHODS ==================
+    private void updateSkillMethodConfig() {
+        SkillType st = (SkillType) skillCombo.getSelectedItem();
+        Object sel = trainingMethodCombo.getSelectedItem();
+        if (st == null || sel == null) return;
+        try {
+            String key = getConfigKeyForMethod(st);
+            if (key == null) return;
+            ConfigManager cm = script.getConfigManager();
+            String group = script.getConfigGroup();
+            String value = (sel instanceof Enum) ? ((Enum<?>) sel).name() : sel.toString();
+            cm.setConfiguration(group, key, value);
+        } catch (Exception ex) {
+            System.out.println("updateSkillMethodConfig failed: " + ex.getMessage());
+        }
+    }
+
+    private boolean showSkillConfigDialog(SkillType skillType) {
+        if (skillType == null) return false;
+        JDialog dialog = new JDialog(this, "Configure " + skillType.getDisplayName(), true);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5,5,5,5);
+        gbc.gridx=0; gbc.gridy=0; gbc.anchor = GridBagConstraints.WEST; gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(new JLabel("Training Method:"), gbc);
+        JComboBox<Object> methodCombo = new JComboBox<>();
+        populateMethodCombo(methodCombo, skillType);
+        // preselect current method
+        Object current = getCurrentConfigMethod(skillType);
+        if (current != null) {
+            for (int i=0;i<methodCombo.getItemCount();i++) {
+                Object it = methodCombo.getItemAt(i);
+                if (it != null && it.toString().equalsIgnoreCase(current.toString())) { methodCombo.setSelectedIndex(i); break; }
+            }
+        }
+        gbc.gridx=1; panel.add(methodCombo, gbc);
+        Map<String, JComponent> extra = new HashMap<>();
+        gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; addSkillSpecificOptions(skillType, panel, extra, gbc);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton ok = new JButton("OK"); JButton cancel = new JButton("Cancel");
+        final boolean[] result = {false};
+        ok.addActionListener(e -> { updateConfigFromDialog(skillType, methodCombo, extra); result[0] = true; dialog.dispose(); });
+        cancel.addActionListener(e -> { dialog.dispose(); });
+        buttons.add(ok); buttons.add(cancel);
+        gbc.gridy++; panel.add(buttons, gbc);
+        dialog.add(panel);
+        dialog.pack(); dialog.setLocationRelativeTo(this); applyDialogTheme(dialog); dialog.setVisible(true);
+        return result[0];
+    }
+
+    private void populateMethodCombo(JComboBox<Object> combo, SkillType skillType) {
+        combo.removeAllItems();
+        if (skillType == null) return;
+        switch (skillType) {
+            case ATTACK: case STRENGTH: case DEFENCE:
+                for (AllInOneConfig.CombatStyle cs : AllInOneConfig.CombatStyle.values()) combo.addItem(cs); break;
+            case RANGED:
+                combo.addItem("Bronze arrows"); combo.addItem("Iron arrows"); combo.addItem("Steel arrows"); combo.addItem("Rune arrows"); combo.addItem("Amethyst arrows"); break;
+            case MAGIC: for (AllInOneConfig.MagicMethod m : AllInOneConfig.MagicMethod.values()) combo.addItem(m); break;
+            case PRAYER: for (AllInOneConfig.PrayerMethod m : AllInOneConfig.PrayerMethod.values()) combo.addItem(m); break;
+            case MINING: for (AllInOneConfig.GatheringMode m : AllInOneConfig.GatheringMode.values()) combo.addItem(m); break;
+            case SMITHING: for (AllInOneConfig.SmithingMethod m : AllInOneConfig.SmithingMethod.values()) combo.addItem(m); break;
+            case FISHING: for (AllInOneConfig.FishingMethod m : AllInOneConfig.FishingMethod.values()) combo.addItem(m); break;
+            case COOKING: for (AllInOneConfig.CookingLocation m : AllInOneConfig.CookingLocation.values()) combo.addItem(m); break;
+            case FIREMAKING: for (AllInOneConfig.LogType m : AllInOneConfig.LogType.values()) combo.addItem(m); break;
+            case WOODCUTTING: for (AllInOneConfig.TreeType m : AllInOneConfig.TreeType.values()) combo.addItem(m); break;
+            case CRAFTING: for (AllInOneConfig.CraftingMethod m : AllInOneConfig.CraftingMethod.values()) combo.addItem(m); break;
+            case FLETCHING: for (AllInOneConfig.FletchingMethod m : AllInOneConfig.FletchingMethod.values()) combo.addItem(m); break;
+            case HERBLORE: for (AllInOneConfig.HerbloreMethod m : AllInOneConfig.HerbloreMethod.values()) combo.addItem(m); break;
+            case RUNECRAFTING: for (AllInOneConfig.RunecraftingMethod m : AllInOneConfig.RunecraftingMethod.values()) combo.addItem(m); break;
+            case CONSTRUCTION: for (AllInOneConfig.ConstructionMethod m : AllInOneConfig.ConstructionMethod.values()) combo.addItem(m); break;
+            case AGILITY: for (AllInOneConfig.AgilityCourse m : AllInOneConfig.AgilityCourse.values()) combo.addItem(m); break;
+            case THIEVING: for (AllInOneConfig.ThievingMethod m : AllInOneConfig.ThievingMethod.values()) combo.addItem(m); break;
+            case SLAYER: for (AllInOneConfig.SlayerStrategy m : AllInOneConfig.SlayerStrategy.values()) combo.addItem(m); break;
+            case HUNTER: for (AllInOneConfig.HunterMethod m : AllInOneConfig.HunterMethod.values()) combo.addItem(m); break;
+            case FARMING: for (AllInOneConfig.FarmingRunType m : AllInOneConfig.FarmingRunType.values()) combo.addItem(m); break;
+            case HITPOINTS: combo.addItem("Combat"); combo.addItem("NMZ"); combo.addItem("PC"); break;
+            default: combo.addItem("Auto");
+        }
+    }
+
+    private void addSkillSpecificOptions(SkillType skillType, JPanel panel, Map<String,JComponent> components, GridBagConstraints gbc) {
+        // Append options starting at current gbc.gridy. Each option increments row.
+        java.util.function.BiConsumer<String,JComponent> addRow = (label, comp) -> {
+            gbc.gridx=0; gbc.gridwidth=1; gbc.fill=GridBagConstraints.NONE; panel.add(new JLabel(label), gbc);
+            gbc.gridx=1; gbc.fill=GridBagConstraints.HORIZONTAL; panel.add(comp, gbc); gbc.gridy++; };
+        switch (skillType) {
+            case ATTACK: case STRENGTH: case DEFENCE: case RANGED: case THIEVING: {
+                JSpinner food = new JSpinner(new SpinnerNumberModel(40,10,90,1)); addRow.accept("Food HP%:", food); components.put("foodHP", food);
+                JCheckBox specOrDodgy = new JCheckBox(skillType==SkillType.THIEVING?"Use Dodgy?":"Use Spec?");
+                gbc.gridx=0; gbc.gridwidth=2; gbc.fill=GridBagConstraints.NONE; panel.add(specOrDodgy, gbc); components.put(skillType==SkillType.THIEVING?"dodgy":"useSpec", specOrDodgy); gbc.gridy++;
+                break; }
+            case MINING: {
+                JCheckBox three = new JCheckBox("3-Tick"); gbc.gridx=0; gbc.gridwidth=2; panel.add(three, gbc); components.put("3tick", three); gbc.gridy++;
+                JTextField ores = new JTextField("iron,coal",12); addRow.accept("Ores:", ores); components.put("ores", ores); break; }
+            case SMITHING: {
+                JTextField bars = new JTextField("Steel",10); addRow.accept("Bars:", bars); components.put("bars", bars); break; }
+            case FISHING: {
+                JComboBox<Object> mode = new JComboBox<>(AllInOneConfig.GatheringMode.values()); addRow.accept("Mode:", mode); components.put("fishingMode", mode);
+                JCheckBox spec = new JCheckBox("Use Spec?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(spec, gbc); components.put("useSpec", spec); gbc.gridy++; break; }
+            case COOKING: {
+                JCheckBox gaunt = new JCheckBox("Gauntlets?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(gaunt, gbc); components.put("gauntlets", gaunt); gbc.gridy++; break; }
+            case WOODCUTTING: {
+                JCheckBox nests = new JCheckBox("Bird Nests?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(nests, gbc); components.put("nests", nests); gbc.gridy++;
+                JCheckBox spec = new JCheckBox("Use Spec?"); panel.add(spec, gbc); components.put("useSpec", spec); gbc.gridy++; break; }
+            case AGILITY: {
+                JCheckBox stam = new JCheckBox("Stamina?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(stam, gbc); components.put("stamina", stam); gbc.gridy++;
+                JCheckBox marks = new JCheckBox("Collect Marks?"); panel.add(marks, gbc); components.put("marks", marks); gbc.gridy++; break; }
+            case SLAYER: {
+                JCheckBox cannon = new JCheckBox("Use Cannon?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(cannon, gbc); components.put("cannon", cannon); gbc.gridy++; break; }
+            case HUNTER: {
+                JSpinner traps = new JSpinner(new SpinnerNumberModel(0,0,5,1)); addRow.accept("Traps:", traps); components.put("traps", traps);
+                JCheckBox relay = new JCheckBox("Relay?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(relay, gbc); components.put("relay", relay); gbc.gridy++; break; }
+            case FARMING: {
+                JComboBox<Object> compost = new JComboBox<>(AllInOneConfig.CompostType.values()); addRow.accept("Compost:", compost); components.put("compost", compost);
+                JCheckBox bird = new JCheckBox("Birdhouses?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(bird, gbc); components.put("birdhouses", bird); gbc.gridy++; break; }
+            case CONSTRUCTION: {
+                JCheckBox servant = new JCheckBox("Servant?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(servant, gbc); components.put("servant", servant); gbc.gridy++; break; }
+            case HERBLORE: {
+                JCheckBox sec = new JCheckBox("Secondaries?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(sec, gbc); components.put("secondaries", sec); gbc.gridy++; break; }
+            case RUNECRAFTING: {
+                JCheckBox pouch = new JCheckBox("Pouches?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(pouch, gbc); components.put("pouches", pouch); gbc.gridy++;
+                JCheckBox repair = new JCheckBox("Repair?"); panel.add(repair, gbc); components.put("repair", repair); gbc.gridy++; break; }
+            case MAGIC: {
+                JCheckBox splash = new JCheckBox("Splash Prot?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(splash, gbc); components.put("splashProtection", splash); gbc.gridy++; break; }
+            default: // no options
+        }
+    }
+    // ================== END RE-ADDED MISSING METHODS ==================
 }
