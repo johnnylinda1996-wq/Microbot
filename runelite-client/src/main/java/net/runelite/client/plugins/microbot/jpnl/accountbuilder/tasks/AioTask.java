@@ -6,7 +6,7 @@ import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.QuestType;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.MinigameType;
 
 public abstract class AioTask {
-    public enum TaskType { SKILL, QUEST, MINIGAME }
+    public enum TaskType { SKILL, QUEST, MINIGAME, TRAVEL }
 
     @Getter
     private final TaskType type;
@@ -27,4 +27,5 @@ public abstract class AioTask {
     public SkillType getSkillTypeOrNull() { return null; }
     public QuestType getQuestTypeOrNull() { return null; }
     public MinigameType getMinigameTypeOrNull() { return null; }
+    public net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation getTravelLocationOrNull() { return null; }
 }

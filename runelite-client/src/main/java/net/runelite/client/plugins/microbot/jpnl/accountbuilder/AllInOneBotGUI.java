@@ -8,6 +8,9 @@ import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioTask;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioSkillTask;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioQuestTask;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioMinigameTask;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioTravelTask; // NEW
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation; // NEW
+import net.runelite.api.coords.WorldPoint; // NEW
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -126,7 +129,7 @@ public class AllInOneBotGUI extends JFrame {
                 case "Quest Task": return "Tâche de Quête";
                 case "Minigame Task": return "Tâche de Mini-jeu";
                 case "Target Level": return "Niveau Cible";
-                case "Duration (min)": return "Durée (min)";
+                case "Duration (min)": return "Dur������e (min)";
                 case "Add Skill Task": return "Ajouter Compétence";
                 case "Add Quest Task": return "Ajouter Quête";
                 case "Add Minigame Task": return "Ajouter Mini-jeu";
@@ -161,6 +164,9 @@ public class AllInOneBotGUI extends JFrame {
     private JComboBox<MinigameType> minigameCombo;
     private JSpinner minigameDurationSpinner; // NEW: Duration for minigames
     private JButton addMinigameButton;
+    // --- Travel task components (NEW) ---
+    private JComboBox<Object> travelCombo; // TravelLocation values + group labels + "Custom..." (NEW refactored)
+    private JButton addTravelButton;
 
     private JButton removeSelectedButton;
     private JButton startButton;
@@ -221,8 +227,13 @@ public class AllInOneBotGUI extends JFrame {
     // Icon cache for control buttons
     private Icon playIcon, pauseIcon, skipIcon, hideIcon, saveIconSmall, loadIconSmall, shuffleIcon;
 
+    // Travel icons
+    private static final Map<TravelLocation, Icon> TRAVEL_ICONS = new EnumMap<>(TravelLocation.class); // NEW
+    private static Icon TRAVEL_CUSTOM_ICON; // NEW
+
     // Keep panel references for language/theme updates
-    private JPanel skillPanelRef, questPanelRef, minigamePanelRef, queuePanelRef, controlPanelRef, statusPanelRef;
+    private JPanel skillPanelRef, questPanelRef, minigamePanelRef, queuePanelRef, controlPanelRef, statusPanelRef; // existing
+    private JPanel travelPanelRef; // NEW
 
     // Menu item references for language switching
     private JMenu appearanceMenuRef; // to add language submenu here instead of Help
@@ -624,6 +635,14 @@ public class AllInOneBotGUI extends JFrame {
         } else if (task instanceof AioMinigameTask) {
             AioMinigameTask m = (AioMinigameTask) task;
             return String.format("MINIGAME:%s", m.getMinigameType().name());
+        } else if (task instanceof AioTravelTask) { // NEW travel export
+            AioTravelTask tr = (AioTravelTask) task;
+            if (tr.getTravelLocationOrNull() != null) {
+                return "TRAVEL:" + tr.getTravelLocationOrNull().name();
+            } else if (tr.getCustomPoint() != null) {
+                WorldPoint p = tr.getCustomPoint();
+                return "TRAVEL_CUSTOM:" + tr.getCustomName().replace(":","_") + ":" + p.getX() + ":" + p.getY() + ":" + p.getPlane();
+            }
         }
         return task.getDisplay();
     }
@@ -632,9 +651,7 @@ public class AllInOneBotGUI extends JFrame {
         try {
             String[] parts = line.split(":");
             if (parts.length < 2) return false;
-
             String type = parts[0].toUpperCase();
-
             if ("SKILL".equals(type) && parts.length >= 4) {
                 SkillType skillType = SkillType.valueOf(parts[1]);
                 String mode = parts[2];
@@ -656,10 +673,23 @@ public class AllInOneBotGUI extends JFrame {
                 MinigameType minigameType = MinigameType.valueOf(parts[1]);
                 script.addMinigameTask(minigameType);
                 return true;
+            } else if ("TRAVEL_CUSTOM".equals(type) && parts.length >= 5) { // NEW parse custom travel
+                try {
+                    String name = parts[1];
+                    int x = Integer.parseInt(parts[2]);
+                    int y = Integer.parseInt(parts[3]);
+                    int z = Integer.parseInt(parts[4]);
+                    script.addTravelTaskCustom(name, new WorldPoint(x,y,z));
+                    return true;
+                } catch (Exception ignored) {}
+            } else if ("TRAVEL".equals(type) && parts.length >= 2) { // NEW parse preset travel
+                try {
+                    TravelLocation tl = TravelLocation.valueOf(parts[1]);
+                    script.addTravelTask(tl);
+                    return true;
+                } catch (Exception ignored) {}
             }
-        } catch (Exception e) {
-            // Skip invalid lines
-        }
+        } catch (Exception e) { }
         return false;
     }
 
@@ -897,6 +927,7 @@ public class AllInOneBotGUI extends JFrame {
         loadSkillIcons();
         loadQuestIcon();
         loadMinigameIcons();
+        loadTravelIcons(); // NEW
 
         skillCombo = new JComboBox<>(Arrays.stream(SkillType.values())
                 .sorted(Comparator.comparing(SkillType::name))
@@ -937,9 +968,17 @@ public class AllInOneBotGUI extends JFrame {
 
         minigameCombo = new JComboBox<>(Arrays.stream(MinigameType.values())
                 .sorted(Comparator.comparing(MinigameType::getDisplayName))
+                .filter(mt -> !mt.name().equals("BARBARIAN_ASSAULT")) // NEW exclude Barbarian Assault
                 .toArray(MinigameType[]::new));
         minigameCombo.setRenderer(new MinigameIconRenderer());
         addMinigameButton = new JButton("Add Minigame Task");
+
+        // --- Travel components (NEW) ---
+        travelCombo = new JComboBox<>();
+        populateTravelCombo(); // NEW
+        addTravelButton = new JButton("Add Travel Task");
+        setTravelCustomEnabled(false);
+        travelCombo.addActionListener(e -> setTravelCustomEnabled(isTravelCustomSelected()));
 
         taskModel = new DefaultListModel<>();
         taskList = new JList<>(taskModel);
@@ -1112,22 +1151,144 @@ public class AllInOneBotGUI extends JFrame {
         return new ImageIcon(img);
     }
 
-    private void applyControlIcons() {
-        startButton.setIcon(playIcon);
-        pauseButton.setIcon(pauseIcon);
-        skipButton.setIcon(skipIcon);
-        hideButton.setIcon(hideIcon);
-        saveButton.setIcon(saveIconSmall);
-        loadButton.setIcon(loadIconSmall);
-        shuffleButton.setIcon(shuffleIcon);
-        startButton.setHorizontalTextPosition(SwingConstants.RIGHT);
-        pauseButton.setHorizontalTextPosition(SwingConstants.RIGHT);
-        skipButton.setHorizontalTextPosition(SwingConstants.RIGHT);
-        hideButton.setHorizontalTextPosition(SwingConstants.RIGHT);
-        saveButton.setHorizontalTextPosition(SwingConstants.RIGHT);
-        loadButton.setHorizontalTextPosition(SwingConstants.RIGHT);
-        shuffleButton.setHorizontalTextPosition(SwingConstants.RIGHT);
+    // NEW: load travel icons (simple generated icons, special color for banks/f2p/p2p)
+    private void loadTravelIcons() {
+        for (TravelLocation tl : TravelLocation.values()) {
+            TRAVEL_ICONS.put(tl, generateTravelIcon(tl));
+        }
+        if (TRAVEL_CUSTOM_ICON == null) TRAVEL_CUSTOM_ICON = generateCustomTravelIcon();
     }
+
+    private Icon generateTravelIcon(TravelLocation tl) {
+        int sz = 18;
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(sz, sz, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        String name = tl.getDisplayName().toLowerCase();
+        boolean bank = name.contains("bank");
+        Color base;
+        if (bank) base = new Color(190,160,40);
+        else if (tl.isF2p()) base = new Color(60,120,190);
+        else base = new Color(120,70,150);
+        GradientPaint gp = new GradientPaint(0,0, base.brighter(), sz, sz, base.darker());
+        g.setPaint(gp);
+        g.fillRoundRect(1,1,sz-2,sz-2,5,5);
+        g.setColor(new Color(20,20,20,180));
+        g.drawRoundRect(1,1,sz-2,sz-2,5,5);
+        g.setFont(new Font("SansSerif", Font.BOLD, bank ? 9 : 10));
+        String letter;
+        if (bank) letter = "B";
+        else {
+            letter = tl.name().substring(0,1);
+            if (!Character.isLetter(letter.charAt(0))) letter = "T";
+        }
+        FontMetrics fm = g.getFontMetrics();
+        int tx = (sz - fm.stringWidth(letter))/2;
+        int ty = (sz - fm.getHeight())/2 + fm.getAscent();
+        g.setColor(Color.WHITE);
+        g.drawString(letter, tx, ty);
+        g.dispose();
+        return new ImageIcon(img);
+    }
+
+    private Icon generateCustomTravelIcon() {
+        int sz = 18;
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(sz, sz, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        GradientPaint gp = new GradientPaint(0,0,new Color(90,90,90), sz, sz, new Color(60,60,60));
+        g.setPaint(gp);
+        g.fillOval(1,1,sz-2,sz-2);
+        g.setColor(Color.BLACK);
+        g.drawOval(1,1,sz-2,sz-2);
+        g.setFont(new Font("SansSerif", Font.BOLD, 9));
+        String letter = "C";
+        FontMetrics fm = g.getFontMetrics();
+        int tx = (sz - fm.stringWidth(letter))/2;
+        int ty = (sz - fm.getHeight())/2 + fm.getAscent();
+        g.setColor(Color.WHITE);
+        g.drawString(letter, tx, ty);
+        g.dispose();
+        return new ImageIcon(img);
+    }
+
+    // --- ADDED HELPERS (travel + control icons) ---
+    private void applyControlIcons() {
+        if (startButton != null) { startButton.setIcon(playIcon); startButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+        if (pauseButton != null) { pauseButton.setIcon(pauseIcon); pauseButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+        if (skipButton != null) { skipButton.setIcon(skipIcon); skipButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+        if (hideButton != null) { hideButton.setIcon(hideIcon); hideButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+        if (saveButton != null) { saveButton.setIcon(saveIconSmall); saveButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+        if (loadButton != null) { loadButton.setIcon(loadIconSmall); loadButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+        if (shuffleButton != null) { shuffleButton.setIcon(shuffleIcon); shuffleButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+    }
+
+    private void populateTravelCombo() {
+        if (travelCombo == null) return;
+        DefaultComboBoxModel<Object> model = new DefaultComboBoxModel<>();
+        model.addElement("--- F2P Locations ---");
+        for (TravelLocation tl : TravelLocation.values()) if (tl.isF2p()) model.addElement(tl);
+        model.addElement("--- P2P Locations ---");
+        for (TravelLocation tl : TravelLocation.values()) if (!tl.isF2p()) model.addElement(tl);
+        model.addElement("Custom...");
+        travelCombo.setModel(model);
+        travelCombo.setRenderer(new TravelLocationRenderer());
+    }
+
+    private static class TravelLocationRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            JLabel lbl = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            if (value instanceof TravelLocation) {
+                TravelLocation tl = (TravelLocation) value;
+                lbl.setText(tl.getDisplayName());
+                Icon ic = TRAVEL_ICONS.get(tl);
+                if (ic != null) lbl.setIcon(ic);
+                lbl.setIconTextGap(6);
+            } else if (value instanceof String) {
+                String s = (String) value;
+                if (s.startsWith("---")) {
+                    lbl.setText(s.replace("-"," ").trim());
+                    lbl.setFont(lbl.getFont().deriveFont(Font.ITALIC));
+                    lbl.setForeground(new Color(150,150,150));
+                    lbl.setIcon(null);
+                } else if (s.startsWith("Custom")) {
+                    lbl.setIcon(TRAVEL_CUSTOM_ICON);
+                }
+            }
+            return lbl;
+        }
+    }
+
+    private TravelCustomResult showCustomTravelDialog() {
+        JDialog dialog = new JDialog(this, "Custom Travel", true);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5,5,5,5);
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST;
+        panel.add(new JLabel("Name:"), gbc);
+        gbc.gridx = 1; JTextField nameField = new JTextField("Custom", 12); panel.add(nameField, gbc);
+        gbc.gridx = 0; gbc.gridy++; panel.add(new JLabel("X:"), gbc);
+        gbc.gridx = 1; JSpinner xSpin = new JSpinner(new SpinnerNumberModel(3222,0,4000,1)); panel.add(xSpin, gbc);
+        gbc.gridx = 0; gbc.gridy++; panel.add(new JLabel("Y:"), gbc);
+        gbc.gridx = 1; JSpinner ySpin = new JSpinner(new SpinnerNumberModel(3218,0,4000,1)); panel.add(ySpin, gbc);
+        gbc.gridx = 0; gbc.gridy++; panel.add(new JLabel("Z:"), gbc);
+        gbc.gridx = 1; JSpinner zSpin = new JSpinner(new SpinnerNumberModel(0,0,3,1)); panel.add(zSpin, gbc);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton ok = new JButton("OK"); JButton cancel = new JButton("Cancel");
+        final TravelCustomResult[] res = {null};
+        ok.addActionListener(ev -> { res[0] = new TravelCustomResult(nameField.getText().isBlank()?"Custom":nameField.getText().trim(), (Integer)xSpin.getValue(), (Integer)ySpin.getValue(), (Integer)zSpin.getValue()); dialog.dispose(); });
+        cancel.addActionListener(ev -> dialog.dispose());
+        buttons.add(ok); buttons.add(cancel);
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; panel.add(buttons, gbc);
+        dialog.add(panel);
+        dialog.pack(); dialog.setLocationRelativeTo(this); applyDialogTheme(dialog); dialog.setVisible(true);
+        return res[0];
+    }
+
+    private static class TravelCustomResult { final String name; final int x,y,z; TravelCustomResult(String n,int x,int y,int z){this.name=n;this.x=x;this.y=y;this.z=z;} }
+    // --- END ADDED HELPERS ---
 
     // Renderer classes
     private class SkillIconRenderer extends DefaultListCellRenderer {
@@ -1206,6 +1367,14 @@ public class AllInOneBotGUI extends JFrame {
                 else if (e.type == AioTask.TaskType.QUEST) lbl.setIcon(QUEST_ICON);
                 else if (e.type == AioTask.TaskType.MINIGAME) {
                     Icon ic = MINIGAME_ICONS.get(e.minigameType); lbl.setIcon(ic != null ? ic : MINIGAME_FALLBACK_ICON);
+                } else if (e.type == AioTask.TaskType.TRAVEL) { // NEW travel icon
+                    // Attempt to find matching TravelLocation by display substring
+                    Icon tIcon = null;
+                    for (Map.Entry<TravelLocation, Icon> en : TRAVEL_ICONS.entrySet()) {
+                        if (e.displayText.toLowerCase().contains(en.getKey().getDisplayName().toLowerCase())) { tIcon = en.getValue(); break; }
+                    }
+                    if (tIcon == null) tIcon = TRAVEL_CUSTOM_ICON;
+                    lbl.setIcon(tIcon);
                 }
                 lbl.setIconTextGap(10);
                 lbl.setOpaque(true);
@@ -1274,6 +1443,27 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx = 1; minigamePanelRef.add(minigameDurationSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 1440, 1)), gbc);
         gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; minigamePanelRef.add(addMinigameButton, gbc);
         return minigamePanelRef;
+    }
+
+    // --- Travel panel (NEW) ---
+    private JPanel buildTravelPanel() {
+        travelPanelRef = new JPanel(new GridBagLayout());
+        travelPanelRef.setBorder(new TitledBorder(translate("Travel Task")));
+        GridBagConstraints gbc = baseGbc();
+        travelPanelRef.add(new JLabel(translate("Location:")), gbc);
+        gbc.gridx = 1; travelPanelRef.add(travelCombo, gbc);
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; travelPanelRef.add(addTravelButton, gbc);
+        return travelPanelRef;
+    }
+
+    // Helpers for custom travel enable (NEW)
+    private boolean isTravelCustomSelected() {
+        Object sel = travelCombo.getSelectedItem();
+        return sel instanceof String && ((String) sel).startsWith("Custom");
+    }
+    private void setTravelCustomEnabled(boolean en) {
+        travelCombo.setEnabled(!en);
+        travelCombo.setSelectedItem(en ? "Custom" : null);
     }
 
     private JPanel buildQueuePanel() {
@@ -1385,6 +1575,8 @@ public class AllInOneBotGUI extends JFrame {
             if (showQuestPanel) left.add(buildQuestPanel());
             left.add(Box.createVerticalStrut(6));
             if (showMinigamePanel) left.add(buildMinigamePanel());
+            left.add(Box.createVerticalStrut(6));
+            left.add(buildTravelPanel()); // NEW travel panel always shown
 
             JPanel middle = buildQueuePanel();
 
@@ -1408,6 +1600,7 @@ public class AllInOneBotGUI extends JFrame {
         tp.addTab(translate("Skill"), buildSkillPanel());
         tp.addTab(translate("Quest"), buildQuestPanel());
         tp.addTab(translate("Minigame"), buildMinigamePanel());
+        tp.addTab(translate("Travel"), buildTravelPanel()); // NEW tab
         JPanel wrap = new JPanel(new BorderLayout());
         wrap.add(tp, BorderLayout.CENTER);
         return wrap;
@@ -1481,6 +1674,21 @@ public class AllInOneBotGUI extends JFrame {
             if (preserveLocation && originalLocation != null) {
                 SwingUtilities.invokeLater(() -> setLocation(originalLocation));
             }
+        });
+
+        addTravelButton.addActionListener(e -> { // NEW travel listener
+            if (preserveLocation) originalLocation = getLocation();
+            Object sel = travelCombo.getSelectedItem();
+            if (sel instanceof TravelLocation) {
+                script.addTravelTask((TravelLocation) sel);
+            } else if (sel instanceof String && ((String) sel).startsWith("Custom")) {
+                TravelCustomResult r = showCustomTravelDialog();
+                if (r != null) script.addTravelTaskCustom(r.name, new WorldPoint(r.x, r.y, r.z));
+            } else {
+                // Ignore separator rows
+            }
+            refreshQueue();
+            if (preserveLocation && originalLocation != null) SwingUtilities.invokeLater(() -> setLocation(originalLocation));
         });
 
         removeSelectedButton.addActionListener(e -> {
@@ -1593,11 +1801,12 @@ public class AllInOneBotGUI extends JFrame {
         if (cur != null && !cur.isComplete()) taskModel.addElement(buildEntryCurrent(cur));
         java.util.List<AioTask> raw = script.getQueueSnapshotRaw();
         int number = 1;
-        int skillCount=0, questCount=0, miniCount=0;
+        int skillCount=0, questCount=0, miniCount=0, travelCount=0; // UPDATED add travelCount
         for (AioTask t : raw) {
             if (t.getType() == AioTask.TaskType.SKILL) skillCount++;
             else if (t.getType()==AioTask.TaskType.QUEST) questCount++;
             else if (t.getType()==AioTask.TaskType.MINIGAME) miniCount++;
+            else if (t.getType()==AioTask.TaskType.TRAVEL) travelCount++; // NEW
             TaskListEntry e = buildEntry(t, number);
             if (filter == null || filter.isEmpty() || e.displayText.toLowerCase().contains(filter)) {
                 taskModel.addElement(e);
@@ -1605,7 +1814,7 @@ public class AllInOneBotGUI extends JFrame {
             number++;
         }
         tasksSummaryLabel.setText("Tasks: " + raw.size());
-        typeCountsLabel.setText("<html><span style='color:#6fa8dc'>Skills: " + skillCount + "</span> | <span style='color:#f1c232'>Quests: " + questCount + "</span> | <span style='color:#b4a7d6'>Minigames: " + miniCount + "</span></html>");
+        typeCountsLabel.setText("<html><span style='color:#6fa8dc'>Skills: " + skillCount + "</span> | <span style='color:#f1c232'>Quests: " + questCount + "</span> | <span style='color:#b4a7d6'>Minigames: " + miniCount + "</span> | <span style='color:#93c47d'>Travel: " + travelCount + "</span></html>"); // UPDATED
         taskList.repaint();
 
         // Adjust preferred size when queue changes (auto sizing)
@@ -1691,6 +1900,77 @@ public class AllInOneBotGUI extends JFrame {
                             selectByQueueIndex(qIdx);
                         }
                     } catch (NumberFormatException ignored) {}
+                }
+            }
+        } else if (entry.type == AioTask.TaskType.TRAVEL) {
+            AioTask t = script.getQueueSnapshotRaw().get(qIdx);
+            if (t instanceof AioTravelTask) {
+                AioTravelTask tr = (AioTravelTask) t;
+                // Edit travel task (preset or custom)
+                if (tr.getTravelLocationOrNull() != null) {
+                    // Preset travel task
+                    String input = JOptionPane.showInputDialog(this, "Edit Travel Task:\n\nNew Location (or leave blank to keep current):", "Edit Travel Task", JOptionPane.PLAIN_MESSAGE);
+                    if (input != null && !input.trim().isEmpty()) {
+                        try {
+                            TravelLocation newLocation = TravelLocation.valueOf(input.trim());
+                            script.editTravelTask(qIdx, newLocation);
+                            refreshQueue();
+                            selectByQueueIndex(qIdx);
+                        } catch (Exception e) {
+                            JOptionPane.showMessageDialog(this, "Invalid location: " + e.getMessage(), "Edit Travel Task", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                } else {
+                    // Custom travel task
+                    JDialog dialog = new JDialog(this, "Edit Travel Task", true);
+                    dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+                    JPanel panel = new JPanel(new GridBagLayout());
+                    GridBagConstraints gbc = new GridBagConstraints();
+                    gbc.insets = new Insets(10, 10, 10, 10);
+                    gbc.gridx = 0;
+                    gbc.gridy = 0;
+                    gbc.anchor = GridBagConstraints.WEST;
+
+                    panel.add(new JLabel("Task Name:"), gbc);
+                    JTextField nameField = new JTextField(tr.getCustomName(), 15);
+                    gbc.gridx = 1;
+                    panel.add(nameField, gbc);
+
+                    panel.add(new JLabel("X Coordinate:"), gbc);
+                    JSpinner xSpinner = new JSpinner(new SpinnerNumberModel(tr.getCustomPoint().getX(), 0, 4000, 1));
+                    gbc.gridx = 1;
+                    panel.add(xSpinner, gbc);
+
+                    panel.add(new JLabel("Y Coordinate:"), gbc);
+                    JSpinner ySpinner = new JSpinner(new SpinnerNumberModel(tr.getCustomPoint().getY(), 0, 4000, 1));
+                    gbc.gridx = 1;
+                    panel.add(ySpinner, gbc);
+
+                    panel.add(new JLabel("Z Coordinate:"), gbc);
+                    JSpinner zSpinner = new JSpinner(new SpinnerNumberModel(tr.getCustomPoint().getPlane(), 0, 3, 1));
+                    gbc.gridx = 1;
+                    panel.add(zSpinner, gbc);
+
+                    JButton saveButton = new JButton("Save");
+                    saveButton.addActionListener(e -> {
+                        String newName = nameField.getText().trim();
+                        int x = (Integer) xSpinner.getValue();
+                        int y = (Integer) ySpinner.getValue();
+                        int z = (Integer) zSpinner.getValue();
+                        script.editTravelTaskCustom(qIdx, newName, new WorldPoint(x, y, z));
+                        refreshQueue();
+                        dialog.dispose();
+                    });
+                    gbc.gridx = 0;
+                    gbc.gridy++;
+                    gbc.gridwidth = 2;
+                    panel.add(saveButton, gbc);
+
+                    dialog.add(panel);
+                    dialog.pack();
+                    dialog.setLocationRelativeTo(this);
+                    dialog.setVisible(true);
                 }
             }
         }
@@ -1926,26 +2206,15 @@ public class AllInOneBotGUI extends JFrame {
             }
             e.displayText = baseDisplay;
             e.tooltip = "Minigame task";
+        } else if (t instanceof AioTravelTask) { // NEW travel entry
+            AioTravelTask tr = (AioTravelTask) t;
+            e.displayText = tr.getDisplay();
+            e.tooltip = "Travel task";
         } else {
             e.displayText = t.getDisplay();
             e.tooltip = t.getDisplay();
         }
         return e;
-    }
-
-    private String formatMinutesToReadable(int totalMinutes) {
-        if (totalMinutes < 60) {
-            return totalMinutes + " Minutes";
-        }
-
-        int hours = totalMinutes / 60;
-        int minutes = totalMinutes % 60;
-
-        if (minutes == 0) {
-            return hours + (hours == 1 ? " Hour" : " Hours");
-        } else {
-            return hours + (hours == 1 ? " Hour " : " Hours ") + minutes + " Minutes";
-        }
     }
 
     private TaskListEntry buildEntryCurrent(AioTask t) {
@@ -1972,6 +2241,10 @@ public class AllInOneBotGUI extends JFrame {
             e.minigameType = m.getMinigameType();
             e.displayText = m.getMinigameType().getDisplayName();
             e.tooltip = "Current minigame task";
+        } else if (t instanceof AioTravelTask) { // NEW current travel
+            AioTravelTask tr = (AioTravelTask) t;
+            e.displayText = tr.getDisplay();
+            e.tooltip = "Current travel task";
         } else {
             e.displayText = t.getDisplay();
             e.tooltip = t.getDisplay();
@@ -1998,6 +2271,7 @@ public class AllInOneBotGUI extends JFrame {
         if (addSkillButton != null) addSkillButton.setText(translate("Add Skill Task"));
         if (addQuestButton != null) addQuestButton.setText(translate("Add Quest Task"));
         if (addMinigameButton != null) addMinigameButton.setText(translate("Add Minigame Task"));
+        if (addTravelButton != null) addTravelButton.setText(translate("Add Travel Task")); // NEW
         if (removeSelectedButton != null) removeSelectedButton.setText(translate("Remove Selected"));
         if (startButton != null) startButton.setText(translate("Start / Resume"));
         if (pauseButton != null) pauseButton.setText(translate(script.isPaused()?"Resume":"Pause"));
@@ -2020,6 +2294,7 @@ public class AllInOneBotGUI extends JFrame {
         updatePanelBorder(queuePanelRef, "Queue");
         updatePanelBorder(controlPanelRef, "Control");
         updatePanelBorder(statusPanelRef, "Status");
+        updatePanelBorder(travelPanelRef, "Travel Task"); // NEW
 
         repaint();
     }
@@ -2888,5 +3163,20 @@ public class AllInOneBotGUI extends JFrame {
             System.out.println("Failed to update skill-specific config: " + e.getMessage());
         }
     }
-}
 
+    private String formatMinutesToReadable(int minutes) {
+        if (minutes <= 0) return "0m";
+        if (minutes < 60) return minutes + "m";
+        int hours = minutes / 60;
+        int remMin = minutes % 60;
+        if (hours < 24) {
+            if (remMin == 0) return hours + "h";
+            return hours + "h " + remMin + "m";
+        }
+        int days = hours / 24;
+        int remHours = hours % 24;
+        if (remHours == 0 && remMin == 0) return days + "d";
+        if (remMin == 0) return days + "d " + remHours + "h";
+        return days + "d " + remHours + "h " + remMin + "m";
+    }
+}

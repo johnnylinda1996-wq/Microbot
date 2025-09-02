@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Skill;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
@@ -23,6 +24,7 @@ import net.runelite.client.plugins.microbot.jpnl.accountbuilder.queue.QueueManag
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.util.XpUtil;
 import net.runelite.client.plugins.microbot.util.antiban.Rs2Antiban;
 import net.runelite.client.plugins.microbot.util.antiban.enums.Activity;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation;
 
 import java.util.*;
 import java.util.concurrent.ScheduledFuture;
@@ -112,6 +114,24 @@ public class AllInOneScript extends Script {
     // New overloaded method that accepts duration
     public synchronized void addMinigameTask(MinigameType minigameType, int durationMinutes) {
         queueManager.add(new AioMinigameTask(minigameType, durationMinutes));
+    }
+
+    public synchronized void addTravelTask(TravelLocation location) {
+        queueManager.add(new AioTravelTask(location));
+    }
+    // NEW: add custom travel task
+    public synchronized void addTravelTaskCustom(String name, WorldPoint point) {
+        queueManager.add(new AioTravelTask(name, point));
+    }
+    // NEW: replace existing travel task with custom location
+    public synchronized void replaceTravelTaskCustom(int index, String name, WorldPoint point) {
+        List<AioTask> snap = queueManager.snapshot();
+        if (index < 0 || index >= snap.size()) return;
+        AioTask t = snap.get(index);
+        if (t instanceof AioTravelTask) {
+            snap.set(index, new AioTravelTask(name, point));
+            queueManager.setNewOrder(snap);
+        }
     }
 
     public synchronized void removeTask(int index) {
@@ -231,6 +251,8 @@ public class AllInOneScript extends Script {
             handleQuestTask((AioQuestTask) currentTask);
         } else if (currentTask instanceof AioMinigameTask) {
             handleMinigameTask((AioMinigameTask) currentTask);
+        } else if (currentTask instanceof AioTravelTask) {
+            handleTravelTask((AioTravelTask) currentTask);
         }
 
         updateStatusAccessor();
@@ -315,6 +337,16 @@ public class AllInOneScript extends Script {
         if (done) task.markComplete();
     }
 
+    private void handleTravelTask(AioTravelTask task) {
+        task.tickTravel();
+        String destName = task.getDisplayName();
+        if (task.isComplete()) {
+            Microbot.status = "Arrived: " + destName;
+            return;
+        }
+        Microbot.status = "Traveling to: " + destName;
+    }
+
     private void updateAntibanActivity(AioTask task) {
         if (task.getType() == AioTask.TaskType.SKILL) {
             SkillType st = ((AioSkillTask) task).getSkillType();
@@ -329,6 +361,9 @@ public class AllInOneScript extends Script {
                 default:
                     Rs2Antiban.setActivity(Activity.GENERAL_COLLECTING);
             }
+        } else if (task.getType() == AioTask.TaskType.TRAVEL) {
+            // Replaced nonexistent GENERAL_WALKING with GENERAL_COLLECTING as closest generic low-intensity activity
+            Rs2Antiban.setActivity(Activity.GENERAL_COLLECTING);
         } else {
             Rs2Antiban.setActivity(Activity.GENERAL_COLLECTING);
         }
@@ -483,10 +518,24 @@ public class AllInOneScript extends Script {
                 } else if ("MINIGAME".equals(kind)) {
                     MinigameType mt = MinigameType.valueOf(o.get("id").getAsString());
                     list.add(new AioMinigameTask(mt));
+                } else if ("TRAVEL".equals(kind)) {
+                    try {
+                        if (o.has("mode") && "CUSTOM".equals(o.get("mode").getAsString())) {
+                            String name = o.has("name") ? o.get("name").getAsString() : "Custom";
+                            int x = o.get("x").getAsInt();
+                            int y = o.get("y").getAsInt();
+                            int z = o.get("z").getAsInt();
+                            list.add(new AioTravelTask(name, new WorldPoint(x,y,z)));
+                        } else {
+                            TravelLocation tl = TravelLocation.valueOf(o.get("id").getAsString());
+                            list.add(new AioTravelTask(tl));
+                        }
+                    } catch (Exception ignored) { }
                 }
             }
             return list;
         }
+        // legacy parsing
         String[] parts = raw.split(";");
         for (String p : parts) {
             String s = p.trim();
@@ -509,6 +558,23 @@ public class AllInOneScript extends Script {
                 if (seg.length >= 2) {
                     MinigameType mt = MinigameType.valueOf(seg[1]);
                     list.add(new AioMinigameTask(mt));
+                }
+            } else if (s.startsWith("TRAVEL_CUSTOM:")) {
+                // format TRAVEL_CUSTOM:name:x:y:z
+                try {
+                    String[] seg = s.split(":");
+                    if (seg.length >= 5) {
+                        String name = seg[1];
+                        int x = Integer.parseInt(seg[2]);
+                        int y = Integer.parseInt(seg[3]);
+                        int z = Integer.parseInt(seg[4]);
+                        list.add(new AioTravelTask(name, new WorldPoint(x,y,z)));
+                    }
+                } catch (Exception ignored) {}
+            } else if (s.startsWith("TRAVEL:")) {
+                String[] seg = s.split(":");
+                if (seg.length >= 2) {
+                    try { list.add(new AioTravelTask(TravelLocation.valueOf(seg[1]))); } catch (Exception ignored) {}
                 }
             }
         }
@@ -555,6 +621,18 @@ public class AllInOneScript extends Script {
         } else if (t instanceof AioMinigameTask) {
             AioMinigameTask m = (AioMinigameTask) t;
             o.addProperty("id", m.getMinigameType().name());
+        } else if (t instanceof AioTravelTask) {
+            AioTravelTask tr = (AioTravelTask) t;
+            if (tr.getTravelLocationOrNull() != null) {
+                o.addProperty("id", tr.getTravelLocationOrNull().name());
+                o.addProperty("mode", "PRESET");
+            } else if (tr.getCustomPoint() != null) {
+                o.addProperty("mode", "CUSTOM");
+                o.addProperty("name", tr.getCustomName());
+                o.addProperty("x", tr.getCustomPoint().getX());
+                o.addProperty("y", tr.getCustomPoint().getY());
+                o.addProperty("z", tr.getCustomPoint().getPlane());
+            }
         }
         return o;
     }
@@ -569,36 +647,19 @@ public class AllInOneScript extends Script {
         } else if (t instanceof AioMinigameTask) {
             AioMinigameTask m = (AioMinigameTask) t;
             sb.append("MINIGAME:").append(m.getMinigameType().name()).append(";");
+        } else if (t instanceof AioTravelTask) {
+            AioTravelTask tr = (AioTravelTask) t;
+            if (tr.getTravelLocationOrNull() != null) {
+                sb.append("TRAVEL:").append(tr.getTravelLocationOrNull().name()).append(";");
+            } else if (tr.getCustomPoint() != null) {
+                sb.append("TRAVEL_CUSTOM:")
+                  .append(tr.getCustomName().replace(";","_"))
+                  .append(":").append(tr.getCustomPoint().getX())
+                  .append(":").append(tr.getCustomPoint().getY())
+                  .append(":").append(tr.getCustomPoint().getPlane())
+                  .append(";");
+            }
         }
-    }
-
-    private Skill mapToApi(SkillType st) {
-        switch (st) {
-            case ATTACK: return Skill.ATTACK;
-            case STRENGTH: return Skill.STRENGTH;
-            case DEFENCE: return Skill.DEFENCE;
-            case RANGED: return Skill.RANGED;
-            case PRAYER: return Skill.PRAYER;
-            case MAGIC: return Skill.MAGIC;
-            case RUNECRAFTING: return Skill.RUNECRAFT;
-            case CONSTRUCTION: return Skill.CONSTRUCTION;
-            case HITPOINTS: return Skill.HITPOINTS;
-            case AGILITY: return Skill.AGILITY;
-            case HERBLORE: return Skill.HERBLORE;
-            case THIEVING: return Skill.THIEVING;
-            case CRAFTING: return Skill.CRAFTING;
-            case FLETCHING: return Skill.FLETCHING;
-            case SLAYER: return Skill.SLAYER;
-            case HUNTER: return Skill.HUNTER;
-            case MINING: return Skill.MINING;
-            case SMITHING: return Skill.SMITHING;
-            case FISHING: return Skill.FISHING;
-            case COOKING: return Skill.COOKING;
-            case FIREMAKING: return Skill.FIREMAKING;
-            case WOODCUTTING: return Skill.WOODCUTTING;
-            case FARMING: return Skill.FARMING;
-        }
-        return Skill.ATTACK;
     }
 
     public synchronized boolean moveTaskUp(int index) {
@@ -649,6 +710,8 @@ public class AllInOneScript extends Script {
             copy = new AioQuestTask(((AioQuestTask) orig).getQuestType());
         } else if (orig instanceof AioMinigameTask) {
             copy = new AioMinigameTask(((AioMinigameTask) orig).getMinigameType());
+        } else if (orig instanceof AioTravelTask) {
+            copy = new AioTravelTask(((AioTravelTask) orig).getTravelLocationOrNull());
         }
         if (copy != null) {
             snap.add(index + 1, copy);
@@ -664,6 +727,8 @@ public class AllInOneScript extends Script {
             ((AioQuestTask) currentTask).markComplete();
         } else if (currentTask instanceof AioMinigameTask) {
             ((AioMinigameTask) currentTask).markComplete();
+        } else if (currentTask instanceof AioTravelTask) {
+            ((AioTravelTask) currentTask).forceComplete();
         }
     }
 
@@ -686,6 +751,30 @@ public class AllInOneScript extends Script {
         }
     }
 
+    public synchronized void editTravelTask(int index, TravelLocation newLocation) {
+        if (newLocation == null) return;
+        List<AioTask> snap = queueManager.snapshot();
+        if (index < 0 || index >= snap.size()) return;
+        AioTask t = snap.get(index);
+        if (t instanceof AioTravelTask) {
+            snap.set(index, new AioTravelTask(newLocation));
+            queueManager.setNewOrder(snap);
+        }
+    }
+
+    public synchronized void editTravelTaskCustom(int index, String name, WorldPoint point) { // NEW
+        List<AioTask> snap = queueManager.snapshot();
+        if (index < 0 || index >= snap.size()) return;
+        AioTask t = snap.get(index);
+        if (t instanceof AioTravelTask) {
+            AioTravelTask tr = (AioTravelTask) t;
+            if (tr.getTravelLocationOrNull() == null) { // only replace if custom
+                snap.set(index, new AioTravelTask(name, point));
+                queueManager.setNewOrder(snap);
+            }
+        }
+    }
+
     public AllInOneConfig getConfig() {
         return config;
     }
@@ -696,5 +785,19 @@ public class AllInOneScript extends Script {
 
     public String getConfigGroup() {
         return configGroup;
+    }
+
+    private net.runelite.api.Skill mapToApi(SkillType st) {
+        if (st == null) return Skill.ATTACK; // default fallback
+        switch (st) {
+            case RUNECRAFTING: return Skill.RUNECRAFT;
+            case HITPOINTS: return Skill.HITPOINTS;
+            default:
+                try {
+                    return Skill.valueOf(st.name());
+                } catch (IllegalArgumentException ex) {
+                    return Skill.ATTACK;
+                }
+        }
     }
 }
