@@ -21,4 +21,17 @@ public class QueueManager {
     }
 
     public int size() { return queue.size(); }
+
+    public boolean moveUp(int index) {
+        if (index <= 0 || index >= queue.size()) return false;
+        AioTask t = queue.remove(index);
+        queue.add(index - 1, t);
+        return true;
+    }
+    public boolean moveDown(int index) {
+        if (index < 0 || index >= queue.size() - 1) return false;
+        AioTask t = queue.remove(index);
+        queue.add(index + 1, t);
+        return true;
+    }
 }

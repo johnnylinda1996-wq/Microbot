@@ -3,36 +3,27 @@ package net.runelite.client.plugins.microbot.jpnl.accountbuilder;
 import net.runelite.client.config.*;
 
 /**
- * All-In-One configuration (gereduceerd):
+ * Account Builder Configuration
  *
- * Verwijderd:
- *  - Alle *Enabled opties (worden nu via GUI / queue beslist)
- *  - Alle *TargetLevel opties (target levels worden nu per taak in de GUI gezet)
- *
- * Overgebleven:
- *  - Alleen settings die daadwerkelijk runtime gedrag beïnvloeden (styles, modes, toggles)
- *  - Algemene settings (antiban, debug, autostart)
- *
- * Let op:
- *  - Alle code die nog refereert aan bijv. config.attackEnabled() of config.attackTargetLevel()
- *    moet worden aangepast om de GUI/queue bron te gebruiken.
+ * Clean and organized configuration with dedicated tabs for each skill.
+ * Use the GUI to add tasks, configure training methods here.
  */
 @ConfigGroup("allInOneAio")
 public interface AllInOneConfig extends Config {
 
-    /* ===================== GENERAL ====================== */
+    /* ===================== GENERAL SETTINGS ====================== */
 
     @ConfigSection(
-            name = "General",
-            description = "Algemene AIO instellingen",
+            name = "⚙️ General",
+            description = "Basic bot settings",
             position = 0
     )
     String generalSection = "generalSection";
 
     @ConfigItem(
             keyName = "antibanEnabled",
-            name = "Enable Antiban",
-            description = "Gebruik antiban gedrag",
+            name = "🛡️ Antiban",
+            description = "Enable anti-detection features",
             section = generalSection,
             position = 0
     )
@@ -40,8 +31,8 @@ public interface AllInOneConfig extends Config {
 
     @ConfigItem(
             keyName = "debug",
-            name = "Debug logging",
-            description = "Extra console / log output",
+            name = "🐛 Debug",
+            description = "Show detailed logs",
             section = generalSection,
             position = 1
     )
@@ -49,452 +40,978 @@ public interface AllInOneConfig extends Config {
 
     @ConfigItem(
             keyName = "autoStart",
-            name = "Auto start script",
-            description = "Start automatisch de loop bij plugin start",
+            name = "🏃 Auto Start",
+            description = "Start when plugin loads",
             section = generalSection,
             position = 2
     )
     default boolean autoStart() { return false; }
 
-    @ConfigItem(
-            keyName = "queuePersistence",
-            name = "Queue JSON (Intern)",
-            description = "Intern veld voor queue persistentie",
-            section = generalSection,
-            position = 3,
-            hidden = true
-    )
-    default String queuePersistence() { return ""; }
+    /* ===================== COMBAT SKILLS ====================== */
 
-    /* =====================================================
-       COMBAT SKILLS (Attack / Strength / Defence / Ranged / Magic / Prayer / Hitpoints)
-       Verwijderd: enabled + targetLevel config items
-       ===================================================== */
-
+    // ATTACK
     @ConfigSection(
-            name = "Attack",
-            description = "Attack instellingen",
+            name = "🗡️ Attack",
+            description = "Attack training settings",
             position = 10,
             closedByDefault = true
     )
     String attackSection = "attackSection";
 
-    @ConfigItem(keyName = "attackStyle", name = "Style", description = "Training stijl", section = attackSection, position = 0)
+    @ConfigItem(
+            keyName = "attackStyle",
+            name = "Combat Style",
+            description = "Combat style for Attack training",
+            section = attackSection,
+            position = 0
+    )
     default CombatStyle attackStyle() { return CombatStyle.ACCURATE; }
 
-    @ConfigItem(keyName = "attackFoodBelow", name = "Eet onder HP%", description = "Eet voedsel onder dit HP %", section = attackSection, position = 1)
-    default int attackFoodBelow() { return 40; }
+    @ConfigItem(
+            keyName = "attackFoodHP",
+            name = "Food HP%",
+            description = "Eat food below this HP%",
+            section = attackSection,
+            position = 1
+    )
+    @Range(min = 10, max = 90)
+    default int attackFoodHP() { return 40; }
 
-    @ConfigItem(keyName = "attackUseSpec", name = "Gebruik Special", description = "Gebruik spec bij beschikbaarheid", section = attackSection, position = 2)
+    @ConfigItem(
+            keyName = "attackUseSpec",
+            name = "Use Special Attack",
+            description = "Use weapon special attacks",
+            section = attackSection,
+            position = 2
+    )
     default boolean attackUseSpec() { return true; }
 
-    @ConfigItem(keyName = "attackPotionMode", name = "Potion Mode", description = "Gebruik combat potions", section = attackSection, position = 3)
-    default PotionMode attackPotionMode() { return PotionMode.NONE; }
-
-    /* Strength */
+    // STRENGTH
     @ConfigSection(
-            name = "Strength",
-            description = "Strength instellingen",
+            name = "💪 Strength",
+            description = "Strength training settings",
             position = 11,
             closedByDefault = true
     )
     String strengthSection = "strengthSection";
 
-    @ConfigItem(keyName = "strengthStyle", name = "Style", description = "Training stijl", section = strengthSection, position = 0)
+    @ConfigItem(
+            keyName = "strengthStyle",
+            name = "Combat Style",
+            description = "Combat style for Strength training",
+            section = strengthSection,
+            position = 0
+    )
     default CombatStyle strengthStyle() { return CombatStyle.AGGRESSIVE; }
 
-    @ConfigItem(keyName = "strengthFoodBelow", name = "Eet onder HP%", description = "HP threshold", section = strengthSection, position = 1)
-    default int strengthFoodBelow() { return 40; }
+    @ConfigItem(
+            keyName = "strengthFoodHP",
+            name = "Food HP%",
+            description = "Eat food below this HP%",
+            section = strengthSection,
+            position = 1
+    )
+    @Range(min = 10, max = 90)
+    default int strengthFoodHP() { return 40; }
 
-    @ConfigItem(keyName = "strengthUseSpec", name = "Gebruik Special", description = "Gebruik spec", section = strengthSection, position = 2)
+    @ConfigItem(
+            keyName = "strengthUseSpec",
+            name = "Use Special Attack",
+            description = "Use weapon special attacks",
+            section = strengthSection,
+            position = 2
+    )
     default boolean strengthUseSpec() { return true; }
 
-    @ConfigItem(keyName = "strengthPotionMode", name = "Potion Mode", description = "Gebruik potions", section = strengthSection, position = 3)
-    default PotionMode strengthPotionMode() { return PotionMode.NONE; }
-
-    /* Defence */
+    // DEFENCE
     @ConfigSection(
-            name = "Defence",
-            description = "Defence instellingen",
+            name = "🛡️ Defence",
+            description = "Defence training settings",
             position = 12,
             closedByDefault = true
     )
     String defenceSection = "defenceSection";
 
-    @ConfigItem(keyName = "defenceStyle", name = "Style", description = "Training stijl", section = defenceSection, position = 0)
+    @ConfigItem(
+            keyName = "defenceStyle",
+            name = "Combat Style",
+            description = "Combat style for Defence training",
+            section = defenceSection,
+            position = 0
+    )
     default CombatStyle defenceStyle() { return CombatStyle.DEFENSIVE; }
 
-    @ConfigItem(keyName = "defenceFoodBelow", name = "Eet onder HP%", description = "HP% eten", section = defenceSection, position = 1)
-    default int defenceFoodBelow() { return 40; }
+    @ConfigItem(
+            keyName = "defenceFoodHP",
+            name = "Food HP%",
+            description = "Eat food below this HP%",
+            section = defenceSection,
+            position = 1
+    )
+    @Range(min = 10, max = 90)
+    default int defenceFoodHP() { return 40; }
 
-    @ConfigItem(keyName = "defenceUseSpec", name = "Gebruik Special", description = "Spec gebruiken", section = defenceSection, position = 2)
+    @ConfigItem(
+            keyName = "defenceUseSpec",
+            name = "Use Special Attack",
+            description = "Use weapon special attacks",
+            section = defenceSection,
+            position = 2
+    )
     default boolean defenceUseSpec() { return false; }
 
-    @ConfigItem(keyName = "defencePotionMode", name = "Potion Mode", description = "Gebruik potions", section = defenceSection, position = 3)
-    default PotionMode defencePotionMode() { return PotionMode.NONE; }
-
-    /* Ranged */
+    // HITPOINTS
     @ConfigSection(
-            name = "Ranged",
-            description = "Ranged instellingen",
+            name = "❤️ Hitpoints",
+            description = "Hitpoints training settings",
             position = 13,
+            closedByDefault = true
+    )
+    String hitpointsSection = "hitpointsSection";
+
+    @ConfigItem(
+            keyName = "hitpointsMethod",
+            name = "Training Method",
+            description = "How to train Hitpoints",
+            section = hitpointsSection,
+            position = 0
+    )
+    default String hitpointsMethod() { return "Combat"; }
+
+    // RANGED
+    @ConfigSection(
+            name = "🏹 Ranged",
+            description = "Ranged training settings",
+            position = 14,
             closedByDefault = true
     )
     String rangedSection = "rangedSection";
 
-    @ConfigItem(keyName = "rangedAmmoType", name = "Ammo Type", description = "Type munitie (placeholder)", section = rangedSection, position = 0)
-    default String rangedAmmoType() { return ""; }
+    @ConfigItem(
+            keyName = "rangedAmmo",
+            name = "Ammo Type",
+            description = "Ammunition to use",
+            section = rangedSection,
+            position = 0
+    )
+    default String rangedAmmo() { return "Iron arrows"; }
 
-    @ConfigItem(keyName = "rangedPrayerMode", name = "Prayer Mode", description = "Bescherm / DPS prayer", section = rangedSection, position = 1)
-    default PrayerSupportMode rangedPrayerMode() { return PrayerSupportMode.NONE; }
+    @ConfigItem(
+            keyName = "rangedFoodHP",
+            name = "Food HP%",
+            description = "Eat food below this HP%",
+            section = rangedSection,
+            position = 1
+    )
+    @Range(min = 10, max = 90)
+    default int rangedFoodHP() { return 50; }
 
-    @ConfigItem(keyName = "rangedUseSpec", name = "Gebruik Special", description = "Spec gebruiken (D Bow / ACB etc.)", section = rangedSection, position = 2)
+    @ConfigItem(
+            keyName = "rangedUseSpec",
+            name = "Use Special Attack",
+            description = "Use ranged special attacks",
+            section = rangedSection,
+            position = 2
+    )
     default boolean rangedUseSpec() { return false; }
 
-    @ConfigItem(keyName = "rangedFoodBelow", name = "Eet onder HP%", description = "HP% eten", section = rangedSection, position = 3)
-    default int rangedFoodBelow() { return 50; }
-
-    /* Magic */
+    // PRAYER
     @ConfigSection(
-            name = "Magic",
-            description = "Magic instellingen",
-            position = 14,
-            closedByDefault = true
-    )
-    String magicSection = "magicSection";
-
-    @ConfigItem(keyName = "magicTrainingMode", name = "Training Mode", description = "Spell/strategie", section = magicSection, position = 0)
-    default MagicTrainingMode magicTrainingMode() { return MagicTrainingMode.HIGH_ALCH; }
-
-    @ConfigItem(keyName = "magicEnableSplashFailsafe", name = "Splash Failsafe", description = "Herstart bij geen XP tick", section = magicSection, position = 1)
-    default boolean magicEnableSplashFailsafe() { return true; }
-
-    @ConfigItem(keyName = "magicUseStamina", name = "Use Stamina", description = "Gebruik stamina potions", section = magicSection, position = 2)
-    default boolean magicUseStamina() { return false; }
-
-    /* Prayer */
-    @ConfigSection(
-            name = "Prayer",
-            description = "Prayer instellingen",
+            name = "🙏 Prayer",
+            description = "Prayer training settings",
             position = 15,
             closedByDefault = true
     )
     String prayerSection = "prayerSection";
 
-    @ConfigItem(keyName = "prayerTrainingMode", name = "Mode", description = "Beenderen / Gilded / Ectofuntus (placeholder)", section = prayerSection, position = 0)
-    default PrayerTrainingMode prayerTrainingMode() { return PrayerTrainingMode.BONES_ALTAR; }
+    @ConfigItem(
+            keyName = "prayerMethod",
+            name = "Training Method",
+            description = "How to train Prayer",
+            section = prayerSection,
+            position = 0
+    )
+    default PrayerMethod prayerMethod() { return PrayerMethod.BONES_ALTAR; }
 
-    @ConfigItem(keyName = "prayerUseIncense", name = "Use Incense (future)", description = "Toekomstige buff support", section = prayerSection, position = 1)
-    default boolean prayerUseIncense() { return false; }
-
-    /* Hitpoints (passief) */
+    // MAGIC
     @ConfigSection(
-            name = "Hitpoints",
-            description = "Hitpoints instellingen",
+            name = "🔮 Magic",
+            description = "Magic training settings",
             position = 16,
             closedByDefault = true
     )
-    String hpSection = "hpSection";
+    String magicSection = "magicSection";
 
-    @ConfigItem(keyName = "hitpointsMethod", name = "Method (placeholder)", description = "NMZ / Sandcrabs etc", section = hpSection, position = 0)
-    default String hitpointsMethod() { return ""; }
+    @ConfigItem(
+            keyName = "magicMethod",
+            name = "Training Method",
+            description = "How to train Magic",
+            section = magicSection,
+            position = 0
+    )
+    default MagicMethod magicMethod() { return MagicMethod.HIGH_ALCH; }
 
-    /* =====================================================
-       GATHERING SKILLS (Mining / Woodcutting / Fishing / Hunter / Farming)
-       ===================================================== */
+    @ConfigItem(
+            keyName = "magicSplashProtection",
+            name = "Splash Protection",
+            description = "Restart if no XP gained",
+            section = magicSection,
+            position = 1
+    )
+    default boolean magicSplashProtection() { return true; }
 
+    /* ===================== GATHERING SKILLS ====================== */
+
+    // MINING
     @ConfigSection(
-            name = "Mining",
-            description = "Mining instellingen",
+            name = "⛏️ Mining",
+            description = "Mining training settings",
             position = 20,
             closedByDefault = true
     )
     String miningSection = "miningSection";
 
-    @ConfigItem(keyName = "miningMode", name = "Mode", description = "Powerdrop / Bank", section = miningSection, position = 0)
-    default MiningMode miningMode() { return MiningMode.POWERDROP; }
+    @ConfigItem(
+            keyName = "miningMode",
+            name = "Training Mode",
+            description = "Power mine or bank ores",
+            section = miningSection,
+            position = 0
+    )
+    default GatheringMode miningMode() { return GatheringMode.POWER_DROP; }
 
-    @ConfigItem(keyName = "miningCustomRocks", name = "Allowed Rocks", description = "comma (iron,coal,gold)", section = miningSection, position = 1)
-    default String miningCustomRocks() { return ""; }
+    @ConfigItem(
+            keyName = "miningOres",
+            name = "Ore Types",
+            description = "Preferred ores (comma separated)",
+            section = miningSection,
+            position = 1
+    )
+    default String miningOres() { return "iron,coal"; }
 
-    @ConfigItem(keyName = "miningUse3Tick", name = "Enable 3-tick", description = "Toekomstige geavanceerde methode", section = miningSection, position = 2)
-    default boolean miningUse3Tick() { return false; }
+    @ConfigItem(
+            keyName = "mining3Tick",
+            name = "3-Tick Mining",
+            description = "Use 3-tick mining method",
+            section = miningSection,
+            position = 2
+    )
+    default boolean mining3Tick() { return false; }
 
-    @ConfigItem(keyName = "miningHopIfNoRock", name = "Hop if no rock", description = "Wereld hop (future)", section = miningSection, position = 3)
-    default boolean miningHopIfNoRock() { return false; }
-
+    // SMITHING
     @ConfigSection(
-            name = "Woodcutting",
-            description = "Woodcutting instellingen",
+            name = "⚒️ Smithing",
+            description = "Smithing training settings",
             position = 21,
             closedByDefault = true
     )
-    String woodcuttingSection = "woodcuttingSection";
+    String smithingSection = "smithingSection";
 
-    @ConfigItem(keyName = "wcMode", name = "Mode", description = "Powerdrop / Bank", section = woodcuttingSection, position = 0)
-    default WoodcuttingMode wcMode() { return WoodcuttingMode.POWERDROP; }
+    @ConfigItem(
+            keyName = "smithingMethod",
+            name = "Training Method",
+            description = "How to train Smithing",
+            section = smithingSection,
+            position = 0
+    )
+    default SmithingMethod smithingMethod() { return SmithingMethod.ANVIL; }
 
-    @ConfigItem(keyName = "wcTreeType", name = "Tree Type", description = "Choose specific tree type or Auto for level-based progression", section = woodcuttingSection, position = 1)
-    default WoodcuttingTreeType wcTreeType() { return WoodcuttingTreeType.AUTO; }
+    @ConfigItem(
+            keyName = "smithingBars",
+            name = "Bar Type",
+            description = "Type of bars to work with",
+            section = smithingSection,
+            position = 1
+    )
+    default String smithingBars() { return "Steel"; }
 
-    @ConfigItem(keyName = "wcBirdNestPickup", name = "Pickup Nests", description = "Pak bird nests op", section = woodcuttingSection, position = 2)
-    default boolean wcBirdNestPickup() { return true; }
-
-    @ConfigItem(keyName = "wcUseSpec", name = "Dragon Axe Spec", description = "Gebruik spec bij 100%", section = woodcuttingSection, position = 3)
-    default boolean wcUseSpec() { return true; }
-
+    // FISHING
     @ConfigSection(
-            name = "Fishing",
-            description = "Fishing instellingen",
+            name = "🎣 Fishing",
+            description = "Fishing training settings",
             position = 22,
             closedByDefault = true
     )
     String fishingSection = "fishingSection";
 
-    @ConfigItem(keyName = "fishingMode", name = "Mode", description = "POWERFISH / BANK", section = fishingSection, position = 0)
-    default FishingMode fishingMode() { return FishingMode.POWERFISH; }
+    @ConfigItem(
+            keyName = "fishingMode",
+            name = "Training Mode",
+            description = "Power fish or bank fish",
+            section = fishingSection,
+            position = 0
+    )
+    default GatheringMode fishingMode() { return GatheringMode.POWER_DROP; }
 
-    @ConfigItem(keyName = "fishingMethod", name = "Fishing Method", description = "Choose specific fishing method or Auto for level-based progression", section = fishingSection, position = 1)
+    @ConfigItem(
+            keyName = "fishingMethod",
+            name = "Fishing Method",
+            description = "Fishing technique to use",
+            section = fishingSection,
+            position = 1
+    )
     default FishingMethod fishingMethod() { return FishingMethod.AUTO; }
 
-    @ConfigItem(keyName = "fishingUseSpecHarpoon", name = "Use Spec Harpoon", description = "Harpoon special gebruiken", section = fishingSection, position = 2)
-    default boolean fishingUseSpecHarpoon() { return true; }
+    @ConfigItem(
+            keyName = "fishingSpecial",
+            name = "Use Harpoon Special",
+            description = "Use special attack on harpoons",
+            section = fishingSection,
+            position = 2
+    )
+    default boolean fishingSpecial() { return true; }
 
-
+    // COOKING
     @ConfigSection(
-            name = "Hunter",
-            description = "Hunter instellingen",
+            name = "👨‍🍳 Cooking",
+            description = "Cooking training settings",
             position = 23,
             closedByDefault = true
     )
-    String hunterSection = "hunterSection";
+    String cookingSection = "cookingSection";
 
-    @ConfigItem(keyName = "hunterMethod", name = "Method", description = "Auto / Chinchompa / Bird snare etc.", section = hunterSection, position = 0)
-    default HunterMethod hunterMethod() { return HunterMethod.AUTO; }
+    @ConfigItem(
+            keyName = "cookingLocation",
+            name = "Cooking Location",
+            description = "Where to cook food",
+            section = cookingSection,
+            position = 0
+    )
+    default CookingLocation cookingLocation() { return CookingLocation.AUTO; }
 
-    @ConfigItem(keyName = "hunterTrapCount", name = "Trap Count override", description = "0 = auto by level", section = hunterSection, position = 1)
-    default int hunterTrapCount() { return 0; }
+    @ConfigItem(
+            keyName = "cookingGauntlets",
+            name = "Use Cooking Gauntlets",
+            description = "Equip gauntlets to reduce burns",
+            section = cookingSection,
+            position = 1
+    )
+    default boolean cookingGauntlets() { return true; }
 
-    @ConfigItem(keyName = "hunterAutoRelay", name = "Auto Relay", description = "Replant traps bij fail", section = hunterSection, position = 2)
-    default boolean hunterAutoRelay() { return true; }
-
+    // FIREMAKING
     @ConfigSection(
-            name = "Farming",
-            description = "Farming instellingen",
+            name = "🔥 Firemaking",
+            description = "Firemaking training settings",
             position = 24,
             closedByDefault = true
     )
-    String farmingSection = "farmingSection";
+    String firemakingSection = "firemakingSection";
 
-    @ConfigItem(keyName = "farmingRunMode", name = "Run Mode", description = "Herb / Tree / Fruit / All", section = farmingSection, position = 0)
-    default FarmingRunMode farmingRunMode() { return FarmingRunMode.HERB_ONLY; }
+    @ConfigItem(
+            keyName = "firemakingLogs",
+            name = "Log Type",
+            description = "Type of logs to burn",
+            section = firemakingSection,
+            position = 0
+    )
+    default LogType firemakingLogs() { return LogType.AUTO; }
 
-    @ConfigItem(keyName = "farmingUseCompost", name = "Use Compost", description = "Gebruik (ultra) compost", section = farmingSection, position = 1)
-    default CompostMode farmingUseCompost() { return CompostMode.SUPER; }
-
-    @ConfigItem(keyName = "farmingBirdHouse", name = "Include Birdhouses", description = "Voeg birdhouse run toe", section = farmingSection, position = 2)
-    default boolean farmingBirdHouse() { return false; }
-
-    /* =====================================================
-       ARTISAN / PROCESSING
-       ===================================================== */
-
+    // WOODCUTTING
     @ConfigSection(
-            name = "Smithing",
-            description = "Smithing instellingen",
+            name = "🪓 Woodcutting",
+            description = "Woodcutting training settings",
+            position = 25,
+            closedByDefault = true
+    )
+    String woodcuttingSection = "woodcuttingSection";
+
+    @ConfigItem(
+            keyName = "woodcuttingMode",
+            name = "Training Mode",
+            description = "Power chop or bank logs",
+            section = woodcuttingSection,
+            position = 0
+    )
+    default GatheringMode woodcuttingMode() { return GatheringMode.POWER_DROP; }
+
+    @ConfigItem(
+            keyName = "woodcuttingTrees",
+            name = "Tree Type",
+            description = "Type of trees to cut",
+            section = woodcuttingSection,
+            position = 1
+    )
+    default TreeType woodcuttingTrees() { return TreeType.AUTO; }
+
+    @ConfigItem(
+            keyName = "woodcuttingNests",
+            name = "Collect Bird Nests",
+            description = "Pick up bird nests",
+            section = woodcuttingSection,
+            position = 2
+    )
+    default boolean woodcuttingNests() { return true; }
+
+    @ConfigItem(
+            keyName = "woodcuttingSpecial",
+            name = "Use Dragon Axe Special",
+            description = "Use special attack for speed boost",
+            section = woodcuttingSection,
+            position = 3
+    )
+    default boolean woodcuttingSpecial() { return true; }
+
+    /* ===================== ARTISAN SKILLS ====================== */
+
+    // CRAFTING
+    @ConfigSection(
+            name = "✂️ Crafting",
+            description = "Crafting training settings",
             position = 30,
             closedByDefault = true
     )
-    String smithingSection = "smithingSection";
+    String craftingSection = "craftingSection";
 
-    @ConfigItem(keyName = "smithingMode", name = "Mode", description = "Anvil / Blast / Cannonballs", section = smithingSection, position = 0)
-    default SmithingMode smithingMode() { return SmithingMode.ANVIL; }
+    @ConfigItem(
+            keyName = "craftingMethod",
+            name = "Training Method",
+            description = "What to craft for training",
+            section = craftingSection,
+            position = 0
+    )
+    default CraftingMethod craftingMethod() { return CraftingMethod.GEMS; }
 
-    @ConfigItem(keyName = "smithingBarType", name = "Bar Type", description = "iron/steel/mith/addy/rune", section = smithingSection, position = 1)
-    default String smithingBarType() { return "steel"; }
-
-    @ConfigItem(keyName = "smithingUseCoalBag", name = "Coal Bag", description = "Gebruik coal bag (indien aanwezig)", section = smithingSection, position = 2)
-    default boolean smithingUseCoalBag() { return true; }
-
+    // FLETCHING
     @ConfigSection(
-            name = "Fletching",
-            description = "Fletching instellingen",
+            name = "🏹 Fletching",
+            description = "Fletching training settings",
             position = 31,
             closedByDefault = true
     )
     String fletchingSection = "fletchingSection";
 
-    @ConfigItem(keyName = "fletchingMode", name = "Mode", description = "Logs->Longbow / Shafts / Darts", section = fletchingSection, position = 0)
-    default FletchingMode fletchingMode() { return FletchingMode.LONGBOW; }
+    @ConfigItem(
+            keyName = "fletchingMethod",
+            name = "Training Method",
+            description = "What to fletch for training",
+            section = fletchingSection,
+            position = 0
+    )
+    default FletchingMethod fletchingMethod() { return FletchingMethod.LONGBOWS; }
 
-    @ConfigItem(keyName = "fletchingBankMode", name = "Bank Mode", description = "Bank / Sell GE (future)", section = fletchingSection, position = 1)
-    default BankMode fletchingBankMode() { return BankMode.BANK; }
+    @ConfigItem(
+            keyName = "fletchingBanking",
+            name = "Banking Mode",
+            description = "Bank items or sell on GE",
+            section = fletchingSection,
+            position = 1
+    )
+    default BankingMode fletchingBanking() { return BankingMode.BANK; }
 
+    // HERBLORE
     @ConfigSection(
-            name = "Crafting",
-            description = "Crafting instellingen",
+            name = "🧪 Herblore",
+            description = "Herblore training settings",
             position = 32,
-            closedByDefault = true
-    )
-    String craftingSection = "craftingSection";
-
-    @ConfigItem(keyName = "craftingMethod", name = "Method", description = "Glasses / Battlestaff / Gems", section = craftingSection, position = 0)
-    default CraftingMethod craftingMethod() { return CraftingMethod.GEMS; }
-
-    @ConfigItem(keyName = "craftingUsePortable", name = "Use Furnace (future)", description = "Placeholder voor boosts", section = craftingSection, position = 1)
-    default boolean craftingUsePortable() { return false; }
-
-    @ConfigSection(
-            name = "Cooking",
-            description = "Cooking instellingen",
-            position = 33,
-            closedByDefault = true
-    )
-    String cookingSection = "cookingSection";
-
-    @ConfigItem(keyName = "cookingMode", name = "Mode", description = "Auto / Range / Fire / Stove / Hosidius", section = cookingSection, position = 0)
-    default CookingMode cookingMode() { return CookingMode.AUTO; }
-
-    @ConfigItem(keyName = "cookingGauntlets", name = "Cooking Gauntlets", description = "Zijn gauntlets aanwezig gebruiken", section = cookingSection, position = 1)
-    default boolean cookingGauntlets() { return true; }
-
-    @ConfigSection(
-            name = "Firemaking",
-            description = "Firemaking instellingen",
-            position = 34,
-            closedByDefault = true
-    )
-    String firemakingSection = "firemakingSection";
-
-    @ConfigItem(keyName = "fmMode", name = "Mode", description = "Choose mode for firemaking training", section = firemakingSection, position = 0)
-    default FiremakingLogType fmMode() { return FiremakingLogType.AUTO; }
-
-    @ConfigSection(
-            name = "Herblore",
-            description = "Herblore instellingen",
-            position = 35,
             closedByDefault = true
     )
     String herbloreSection = "herbloreSection";
 
-    @ConfigItem(keyName = "herbloreMode", name = "Mode", description = "Clean / Unf / Mix / Make Tar", section = herbloreSection, position = 0)
-    default HerbloreMode herbloreMode() { return HerbloreMode.CLEAN; }
+    @ConfigItem(
+            keyName = "herbloreMethod",
+            name = "Training Method",
+            description = "How to train Herblore",
+            section = herbloreSection,
+            position = 0
+    )
+    default HerbloreMethod herbloreMethod() { return HerbloreMethod.CLEAN; }
 
-    @ConfigItem(keyName = "herbloreUseSecondaries", name = "Use Secondaries", description = "Voegt secondaries toe bij mixen", section = herbloreSection, position = 1)
-    default boolean herbloreUseSecondaries() { return true; }
+    @ConfigItem(
+            keyName = "herbloreSecondaries",
+            name = "Use Secondary Ingredients",
+            description = "Add secondaries when mixing",
+            section = herbloreSection,
+            position = 1
+    )
+    default boolean herbloreSecondaries() { return true; }
 
+    // RUNECRAFTING
     @ConfigSection(
-            name = "Runecrafting",
-            description = "Runecrafting instellingen",
-            position = 36,
+            name = "🌟 Runecrafting",
+            description = "Runecrafting training settings",
+            position = 33,
             closedByDefault = true
     )
     String runecraftingSection = "runecraftingSection";
 
-    @ConfigItem(keyName = "rcMethod", name = "Method", description = "Altars / Abyss / GOTR / Lava", section = runecraftingSection, position = 0)
-    default RunecraftMethod rcMethod() { return RunecraftMethod.ABYSS; }
+    @ConfigItem(
+            keyName = "runecraftingMethod",
+            name = "Training Method",
+            description = "Runecrafting training method",
+            section = runecraftingSection,
+            position = 0
+    )
+    default RunecraftingMethod runecraftingMethod() { return RunecraftingMethod.ABYSS; }
 
-    @ConfigItem(keyName = "rcUsePouches", name = "Use Pouches", description = "Gebruik pouches", section = runecraftingSection, position = 1)
-    default boolean rcUsePouches() { return true; }
+    @ConfigItem(
+            keyName = "runecraftingPouches",
+            name = "Use Essence Pouches",
+            description = "Use pouches for more essence",
+            section = runecraftingSection,
+            position = 1
+    )
+    default boolean runecraftingPouches() { return true; }
 
-    @ConfigItem(keyName = "rcRepairWithNpc", name = "Use NPC Repair", description = "Use Dark Mage repair", section = runecraftingSection, position = 2)
-    default boolean rcRepairWithNpc() { return true; }
+    @ConfigItem(
+            keyName = "runecraftingRepair",
+            name = "Repair Pouches",
+            description = "Use NPCs to repair pouches",
+            section = runecraftingSection,
+            position = 2
+    )
+    default boolean runecraftingRepair() { return true; }
 
+    // CONSTRUCTION
     @ConfigSection(
-            name = "Construction",
-            description = "Construction instellingen",
-            position = 37,
+            name = "🏠 Construction",
+            description = "Construction training settings",
+            position = 34,
             closedByDefault = true
     )
     String constructionSection = "constructionSection";
 
-    @ConfigItem(keyName = "constructionMethod", name = "Method", description = "Oak Larders / Mahogany / etc", section = constructionSection, position = 0)
-    default ConstructionMethod constructionMethod() { return ConstructionMethod.OAK_LARDER; }
-
-    @ConfigItem(keyName = "constructionUseServant", name = "Use Servant", description = "Demon butler etc.", section = constructionSection, position = 1)
-    default boolean constructionUseServant() { return true; }
-
-    @ConfigSection(
-            name = "Slayer",
-            description = "Slayer instellingen",
-            position = 38,
-            closedByDefault = true
+    @ConfigItem(
+            keyName = "constructionMethod",
+            name = "Training Method",
+            description = "What to build for training",
+            section = constructionSection,
+            position = 0
     )
-    String slayerSection = "slayerSection";
+    default ConstructionMethod constructionMethod() { return ConstructionMethod.OAK_LARDERS; }
 
-    @ConfigItem(keyName = "slayerTaskStrategy", name = "Task Strategy", description = "BLOCK / SKIP / EXTEND (placeholder)", section = slayerSection, position = 0)
-    default SlayerTaskStrategy slayerTaskStrategy() { return SlayerTaskStrategy.BASIC; }
-
-    @ConfigItem(keyName = "slayerUseCannon", name = "Use Cannon", description = "Cannon plaatsen indien mogelijk", section = slayerSection, position = 1)
-    default boolean slayerUseCannon() { return false; }
-
-    @ConfigSection(
-            name = "Thieving",
-            description = "Thieving instellingen",
-            position = 39,
-            closedByDefault = true
+    @ConfigItem(
+            keyName = "constructionServant",
+            name = "Use Servant",
+            description = "Use butler for materials",
+            section = constructionSection,
+            position = 1
     )
-    String thievingSection = "thievingSection";
+    default boolean constructionServant() { return true; }
 
-    @ConfigItem(keyName = "thievingMethod", name = "Method", description = "Stalls / Knights / Ardy / Pyramid", section = thievingSection, position = 0)
-    default ThievingMethod thievingMethod() { return ThievingMethod.STALLS; }
+    /* ===================== SUPPORT SKILLS ====================== */
 
-    @ConfigItem(keyName = "thievingFoodBelow", name = "Eet onder HP%", description = "HP threshold", section = thievingSection, position = 1)
-    default int thievingFoodBelow() { return 40; }
-
-    @ConfigItem(keyName = "thievingUseDodgy", name = "Use Dodgy Necklace", description = "Dodgy necklace equip check", section = thievingSection, position = 2)
-    default boolean thievingUseDodgy() { return true; }
-
+    // AGILITY
     @ConfigSection(
-            name = "Agility",
-            description = "Agility instellingen",
+            name = "🏃‍♂️ Agility",
+            description = "Agility training settings",
             position = 40,
             closedByDefault = true
     )
     String agilitySection = "agilitySection";
 
-    @ConfigItem(keyName = "agilityCourseMode", name = "Course Mode", description = "AUTO / BEST / SPECIFIEK", section = agilitySection, position = 0)
-    default AgilityCourseMode agilityCourseMode() { return AgilityCourseMode.AUTO; }
+    @ConfigItem(
+            keyName = "agilityCourse",
+            name = "Course Selection",
+            description = "Agility course to use",
+            section = agilitySection,
+            position = 0
+    )
+    default AgilityCourse agilityCourse() { return AgilityCourse.AUTO; }
 
-    @ConfigItem(keyName = "agilityUseStamina", name = "Use Stamina", description = "Gebruik stamina potions", section = agilitySection, position = 1)
-    default boolean agilityUseStamina() { return true; }
+    @ConfigItem(
+            keyName = "agilityStamina",
+            name = "Use Stamina Potions",
+            description = "Use stamina pots for run energy",
+            section = agilitySection,
+            position = 1
+    )
+    default boolean agilityStamina() { return true; }
 
-    @ConfigItem(keyName = "agilityLootMarks", name = "Loot Marks", description = "Pak Marks of Grace op", section = agilitySection, position = 2)
-    default boolean agilityLootMarks() { return true; }
+    @ConfigItem(
+            keyName = "agilityMarks",
+            name = "Collect Marks of Grace",
+            description = "Pick up marks during rooftops",
+            section = agilitySection,
+            position = 2
+    )
+    default boolean agilityMarks() { return true; }
 
-    /* =====================================================
-       ENUM TYPES
-       ===================================================== */
+    // THIEVING
+    @ConfigSection(
+            name = "🕵️ Thieving",
+            description = "Thieving training settings",
+            position = 41,
+            closedByDefault = true
+    )
+    String thievingSection = "thievingSection";
 
-    // Combat / potions / prayers
-    enum CombatStyle { ACCURATE, AGGRESSIVE, CONTROLLED, DEFENSIVE }
-    enum PotionMode { NONE, SUPER, SUPER_COMBAT, RANGING, MAGIC, ABSORPTION }
-    enum PrayerSupportMode { NONE, PROTECT_MELEE, PROTECT_MISSILES, PROTECT_MAGIC, PIETY, RIGOUR, AUGURY }
-    enum MagicTrainingMode { LOW_ALCH, HIGH_ALCH, SPLASH, CRUMBLE_UNDEAD, STUN_ALCH, SUPERHEAT, TELE_GRAB }
-    enum PrayerTrainingMode { BONES_ALTAR, GILDED_BURNT, ECTOFUNTUS, ENSOULED_HEADS }
+    @ConfigItem(
+            keyName = "thievingMethod",
+            name = "Training Method",
+            description = "What to thieve for training",
+            section = thievingSection,
+            position = 0
+    )
+    default ThievingMethod thievingMethod() { return ThievingMethod.STALLS; }
 
-    // Gathering
-    enum MiningMode { POWERDROP, BANK }
-    enum WoodcuttingMode { POWERDROP, BANK, NEST_FOCUS }
-    enum WoodcuttingTreeType { AUTO, TREE, OAK, WILLOW, TEAK, MAPLE, MAHOGANY, YEW, MAGIC, REDWOOD }
-    enum FishingMode { POWERFISH, BANK }
-    enum FishingMethod { AUTO, NET, BAIT, LURE, CAGE, HARPOON }
-    enum HunterMethod { AUTO, BIRDS, CHINCHOMPA, SALAMANDER, HERBIBOAR }
-    enum FarmingRunMode { HERB_ONLY, TREE_ONLY, FRUIT_ONLY, HERB_TREE, FULL_RUN }
-    enum CompostMode { NONE, COMPOST, SUPER, ULTRA }
+    @ConfigItem(
+            keyName = "thievingFoodHP",
+            name = "Food HP%",
+            description = "Eat food below this HP%",
+            section = thievingSection,
+            position = 1
+    )
+    @Range(min = 10, max = 90)
+    default int thievingFoodHP() { return 40; }
 
-    // Artisan / processing
-    enum SmithingMode { ANVIL, BLAST_FURNACE, CANNONBALLS }
-    enum FletchingMode { SHAFTS, SHORTBOW, LONGBOW, DARTS, BOLTS }
-    enum BankMode { BANK, SELL_GE }
-    enum CraftingMethod { GEMS, GLASSES, BATTLESTAFF, POTTERY }
-    enum CookingMode { AUTO, FIRE, RANGE, STOVE, HOSIDIUS }
-    enum FiremakingLogType { AUTO, CAMPFIRE, REGULAR, NORMAL, OAK, WILLOW, MAPLE, YEW, MAGIC, TEAK, MAHOGANY, REDWOOD }
-    enum HerbloreMode { CLEAN, UNFINISHED, MIX, TAR }
-    enum RunecraftMethod { ABYSS, ALTAR_DIRECT, LAVA, GOTR, ZMI }
-    enum ConstructionMethod { OAK_LARDER, OAK_DOOR, MAHOGANY_TABLE, GUILD_BENCH }
-    enum SlayerTaskStrategy { BASIC, BLOCK_META, EXTEND_PREFERRED }
-    enum ThievingMethod { STALLS, KNIGHTS, ARDY, PYRAMID }
-    enum AgilityCourseMode { AUTO, BEST, SPECIFIC }
+    @ConfigItem(
+            keyName = "thievingDodgy",
+            name = "Use Dodgy Necklace",
+            description = "Equip dodgy necklaces",
+            section = thievingSection,
+            position = 2
+    )
+    default boolean thievingDodgy() { return true; }
 
+    // SLAYER
+    @ConfigSection(
+            name = "💀 Slayer",
+            description = "Slayer training settings",
+            position = 42,
+            closedByDefault = true
+    )
+    String slayerSection = "slayerSection";
+
+    @ConfigItem(
+            keyName = "slayerStrategy",
+            name = "Task Strategy",
+            description = "How to handle Slayer tasks",
+            section = slayerSection,
+            position = 0
+    )
+    default SlayerStrategy slayerStrategy() { return SlayerStrategy.BASIC; }
+
+    @ConfigItem(
+            keyName = "slayerCannon",
+            name = "Use Dwarf Cannon",
+            description = "Deploy cannon for tasks",
+            section = slayerSection,
+            position = 1
+    )
+    default boolean slayerCannon() { return false; }
+
+    // HUNTER
+    @ConfigSection(
+            name = "🏹 Hunter",
+            description = "Hunter training settings",
+            position = 43,
+            closedByDefault = true
+    )
+    String hunterSection = "hunterSection";
+
+    @ConfigItem(
+            keyName = "hunterMethod",
+            name = "Training Method",
+            description = "What to hunt for training",
+            section = hunterSection,
+            position = 0
+    )
+    default HunterMethod hunterMethod() { return HunterMethod.AUTO; }
+
+    @ConfigItem(
+            keyName = "hunterTraps",
+            name = "Trap Count",
+            description = "Number of traps (0 = auto)",
+            section = hunterSection,
+            position = 1
+    )
+    @Range(min = 0, max = 5)
+    default int hunterTraps() { return 0; }
+
+    @ConfigItem(
+            keyName = "hunterRelay",
+            name = "Auto Trap Replacement",
+            description = "Automatically replace traps",
+            section = hunterSection,
+            position = 2
+    )
+    default boolean hunterRelay() { return true; }
+
+    // FARMING
+    @ConfigSection(
+            name = "🌱 Farming",
+            description = "Farming training settings",
+            position = 44,
+            closedByDefault = true
+    )
+    String farmingSection = "farmingSection";
+
+    @ConfigItem(
+            keyName = "farmingRunType",
+            name = "Run Type",
+            description = "Type of farming run",
+            section = farmingSection,
+            position = 0
+    )
+    default FarmingRunType farmingRunType() { return FarmingRunType.HERB_ONLY; }
+
+    @ConfigItem(
+            keyName = "farmingCompost",
+            name = "Compost Type",
+            description = "Type of compost to use",
+            section = farmingSection,
+            position = 1
+    )
+    default CompostType farmingCompost() { return CompostType.SUPER; }
+
+    @ConfigItem(
+            keyName = "farmingBirdhouses",
+            name = "Include Birdhouses",
+            description = "Add birdhouse runs",
+            section = farmingSection,
+            position = 2
+    )
+    default boolean farmingBirdhouses() { return false; }
+
+    /* ===================== INTERNAL ====================== */
+
+    @ConfigItem(
+            keyName = "queuePersistence",
+            name = "Queue Data",
+            description = "Internal queue storage",
+            hidden = true
+    )
+    default String queuePersistence() { return ""; }
+
+    /* ===================== ENUM DEFINITIONS ====================== */
+
+    enum CombatStyle {
+        ACCURATE("Accurate"),
+        AGGRESSIVE("Aggressive"),
+        CONTROLLED("Controlled"),
+        DEFENSIVE("Defensive");
+
+        private final String name;
+        CombatStyle(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum GatheringMode {
+        POWER_DROP("Power Drop"),
+        BANK("Bank");
+
+        private final String name;
+        GatheringMode(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum TreeType {
+        AUTO("Auto"),
+        NORMAL("Normal"),
+        OAK("Oak"),
+        WILLOW("Willow"),
+        MAPLE("Maple"),
+        YEW("Yew"),
+        MAGIC("Magic");
+
+        private final String name;
+        TreeType(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum LogType {
+        AUTO("Auto"),
+        NORMAL("Normal"),
+        OAK("Oak"),
+        WILLOW("Willow"),
+        MAPLE("Maple"),
+        YEW("Yew"),
+        MAGIC("Magic");
+
+        private final String name;
+        LogType(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum SmithingMethod {
+        ANVIL("Anvil"),
+        BLAST_FURNACE("Blast Furnace"),
+        CANNONBALLS("Cannonballs");
+
+        private final String name;
+        SmithingMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum FletchingMethod {
+        SHORTBOWS("Shortbows"),
+        LONGBOWS("Longbows"),
+        DARTS("Darts"),
+        ARROWS("Arrows");
+
+        private final String name;
+        FletchingMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum BankingMode {
+        BANK("Bank"),
+        SELL_GE("Sell on GE");
+
+        private final String name;
+        BankingMode(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum CookingLocation {
+        AUTO("Auto"),
+        FIRE("Fire"),
+        RANGE("Range"),
+        HOSIDIUS("Hosidius");
+
+        private final String name;
+        CookingLocation(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum MagicMethod {
+        HIGH_ALCH("High Alch"),
+        SPLASHING("Splashing"),
+        STUN_ALCH("Stun Alch"),
+        SUPERHEAT("Superheat");
+
+        private final String name;
+        MagicMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum PrayerMethod {
+        BONES_ALTAR("Bones on Altar"),
+        GILDED_ALTAR("Gilded Altar"),
+        ECTOFUNTUS("Ectofuntus"),
+        ENSOULED_HEADS("Ensouled Heads");
+
+        private final String name;
+        PrayerMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum FishingMethod {
+        AUTO("Auto"),
+        NET("Small Net"),
+        BAIT("Bait Fishing"),
+        LURE("Lure/Fly Fishing"),
+        CAGE("Lobster Cage"),
+        HARPOON("Harpoon");
+
+        private final String name;
+        FishingMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum CraftingMethod {
+        GEMS("Gem Cutting"),
+        GLASSMAKING("Glassmaking"),
+        BATTLESTAVES("Battlestaves"),
+        POTTERY("Pottery");
+
+        private final String name;
+        CraftingMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum HerbloreMethod {
+        CLEAN("Cleaning Herbs"),
+        UNFINISHED("Unfinished Potions"),
+        COMPLETE("Complete Potions"),
+        BARBARIAN("Barbarian Herblore");
+
+        private final String name;
+        HerbloreMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum RunecraftingMethod {
+        ABYSS("Abyss"),
+        DIRECT("Direct Access"),
+        LAVA("Lava Runes"),
+        ZMI("ZMI Altar");
+
+        private final String name;
+        RunecraftingMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum ConstructionMethod {
+        OAK_LARDERS("Oak Larders"),
+        OAK_DOORS("Oak Doors"),
+        MAHOGANY_TABLES("Mahogany Tables"),
+        GUILD_BENCHES("Guild Benches");
+
+        private final String name;
+        ConstructionMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum AgilityCourse {
+        AUTO("Auto"),
+        GNOME("Gnome Course"),
+        BARBARIAN("Barbarian"),
+        CANIFIS("Canifis"),
+        SEERS("Seers Village"),
+        POLLNIVNEACH("Pollnivneach"),
+        RELLEKKA("Rellekka"),
+        ARDOUGNE("Ardougne");
+
+        private final String name;
+        AgilityCourse(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum ThievingMethod {
+        STALLS("Market Stalls"),
+        KNIGHTS("Knights"),
+        PYRAMID("Pyramid Plunder"),
+        BLACKJACKING("Blackjacking");
+
+        private final String name;
+        ThievingMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum SlayerStrategy {
+        BASIC("Basic Tasks"),
+        EFFICIENT("Efficient XP"),
+        PROFIT("Profit Focus"),
+        BLOCK_SKIP("Block/Skip Meta");
+
+        private final String name;
+        SlayerStrategy(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum HunterMethod {
+        AUTO("Auto"),
+        BIRDS("Bird Snaring"),
+        CHINCHOMPAS("Chinchompas"),
+        SALAMANDERS("Salamanders"),
+        HERBIBOAR("Herbiboar");
+
+        private final String name;
+        HunterMethod(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum FarmingRunType {
+        HERB_ONLY("Herb Patches Only"),
+        TREE_ONLY("Tree Patches Only"),
+        FRUIT_ONLY("Fruit Trees Only"),
+        HERB_TREE("Herbs + Trees"),
+        FULL_RUN("Complete Farm Run");
+
+        private final String name;
+        FarmingRunType(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum CompostType {
+        NONE("No Compost"),
+        COMPOST("Regular Compost"),
+        SUPER("Supercompost"),
+        ULTRA("Ultracompost");
+
+        private final String name;
+        CompostType(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
 }

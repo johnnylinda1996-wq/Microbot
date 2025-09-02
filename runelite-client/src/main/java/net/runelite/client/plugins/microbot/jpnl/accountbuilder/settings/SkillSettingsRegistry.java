@@ -15,13 +15,8 @@ import static net.runelite.client.plugins.microbot.jpnl.accountbuilder.settings.
 /**
  * SkillSettingsRegistry
  *
- * Aangepast na verwijderen van *Enabled / *TargetLevel getters uit AllInOneConfig:
- *  - enabled altijd true (GUI/queue bepaalt echte executie)
- *  - targetLevel = -1 (geen config target, gebruik taak target)
- *
- * Flags:
- *  - Wanneer meerdere flags nodig zijn (RC, Agility, etc.) worden ze nu samengevoegd
- *    in één Set voordat de builder wordt aangeroepen (i.p.v. een niet-bestaande flagsMerge()).
+ * Updated to work with the new AllInOneConfig structure with individual skill tabs.
+ * Maps the new config method names to the runtime settings.
  */
 public class SkillSettingsRegistry {
 
@@ -67,25 +62,22 @@ public class SkillSettingsRegistry {
                 .skillType(SkillType.RANGED)
                 .enabled(true)
                 .targetLevel(NO_TARGET)
-                .mode(str(() -> config.rangedAmmoType()))
+                .mode(str(() -> config.rangedAmmo()))
                 .useSpecial(bool(() -> config.rangedUseSpec()))
                 .build());
 
-        Set<String> magicFlags = new HashSet<>();
-        if (bool(() -> config.magicUseStamina())) magicFlags.add("USE_STAMINA");
         map.put(SkillType.MAGIC, SkillRuntimeSettings.builder()
                 .skillType(SkillType.MAGIC)
                 .enabled(true)
                 .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.magicTrainingMode()))
-                .flags(magicFlags)
+                .mode(enumName(() -> config.magicMethod()))
                 .build());
 
         map.put(SkillType.PRAYER, SkillRuntimeSettings.builder()
                 .skillType(SkillType.PRAYER)
                 .enabled(true)
                 .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.prayerTrainingMode()))
+                .mode(enumName(() -> config.prayerMethod()))
                 .build());
 
         map.put(SkillType.HITPOINTS, SkillRuntimeSettings.builder()
@@ -97,39 +89,130 @@ public class SkillSettingsRegistry {
 
         // ============ GATHERING ============
         Set<String> miningFlags = new HashSet<>();
-        if (bool(() -> config.miningUse3Tick())) miningFlags.add("USE_3TICK");
+        if (bool(() -> config.mining3Tick())) miningFlags.add("USE_3TICK");
         map.put(SkillType.MINING, SkillRuntimeSettings.builder()
                 .skillType(SkillType.MINING)
                 .enabled(true)
                 .targetLevel(NO_TARGET)
                 .mode(enumName(() -> config.miningMode()))
-                .customList(parseCsv(str(() -> config.miningCustomRocks())))
+                .customList(parseCsv(str(() -> config.miningOres())))
                 .flags(miningFlags)
-                .hopIfNoResource(bool(() -> config.miningHopIfNoRock()))
                 .build());
 
-        Set<String> wcFlags = new HashSet<>();
-        if (bool(() -> config.wcBirdNestPickup())) wcFlags.add("PICKUP_NESTS");
-        wcFlags.add("WC_TREE_TYPE:" + config.wcTreeType().name());
-        map.put(SkillType.WOODCUTTING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.WOODCUTTING)
+        map.put(SkillType.SMITHING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.SMITHING)
                 .enabled(true)
                 .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.wcMode()))
-                .useSpecial(bool(() -> config.wcUseSpec()))
-                .flags(wcFlags)
+                .mode(enumName(() -> config.smithingMethod()))
                 .build());
 
         Set<String> fishingFlags = new HashSet<>();
         fishingFlags.add("FISHING_METHOD:" + config.fishingMethod().name());
-
         map.put(SkillType.FISHING, SkillRuntimeSettings.builder()
                 .skillType(SkillType.FISHING)
                 .enabled(true)
                 .targetLevel(NO_TARGET)
                 .mode(enumName(() -> config.fishingMode()))
-                .useSpecial(bool(() -> config.fishingUseSpecHarpoon()))
+                .useSpecial(bool(() -> config.fishingSpecial()))
                 .flags(fishingFlags)
+                .build());
+
+        map.put(SkillType.COOKING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.COOKING)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.cookingLocation()))
+                .build());
+
+        map.put(SkillType.FIREMAKING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.FIREMAKING)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.firemakingLogs()))
+                .build());
+
+        Set<String> wcFlags = new HashSet<>();
+        if (bool(() -> config.woodcuttingNests())) wcFlags.add("PICKUP_NESTS");
+        wcFlags.add("WC_TREE_TYPE:" + config.woodcuttingTrees().name());
+        map.put(SkillType.WOODCUTTING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.WOODCUTTING)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.woodcuttingMode()))
+                .useSpecial(bool(() -> config.woodcuttingSpecial()))
+                .flags(wcFlags)
+                .build());
+
+        // ============ ARTISAN ============
+        map.put(SkillType.CRAFTING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.CRAFTING)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.craftingMethod()))
+                .build());
+
+        map.put(SkillType.FLETCHING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.FLETCHING)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.fletchingMethod()))
+                .build());
+
+        map.put(SkillType.HERBLORE, SkillRuntimeSettings.builder()
+                .skillType(SkillType.HERBLORE)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.herbloreMethod()))
+                .build());
+
+        Set<String> rcFlags = new HashSet<>();
+        if (bool(() -> config.runecraftingPouches())) rcFlags.add("USE_POUCHES");
+        if (bool(() -> config.runecraftingRepair())) rcFlags.add("REPAIR_POUCHES");
+        map.put(SkillType.RUNECRAFTING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.RUNECRAFTING)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.runecraftingMethod()))
+                .flags(rcFlags)
+                .build());
+
+        map.put(SkillType.CONSTRUCTION, SkillRuntimeSettings.builder()
+                .skillType(SkillType.CONSTRUCTION)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.constructionMethod()))
+                .build());
+
+        // ============ SUPPORT ============
+        Set<String> agilityFlags = new HashSet<>();
+        if (bool(() -> config.agilityStamina())) agilityFlags.add("USE_STAMINA");
+        if (bool(() -> config.agilityMarks())) agilityFlags.add("PICKUP_MARKS");
+        map.put(SkillType.AGILITY, SkillRuntimeSettings.builder()
+                .skillType(SkillType.AGILITY)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.agilityCourse()))
+                .flags(agilityFlags)
+                .build());
+
+        Set<String> thievingFlags = new HashSet<>();
+        if (bool(() -> config.thievingDodgy())) thievingFlags.add("USE_DODGY");
+        map.put(SkillType.THIEVING, SkillRuntimeSettings.builder()
+                .skillType(SkillType.THIEVING)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.thievingMethod()))
+                .flags(thievingFlags)
+                .build());
+
+        Set<String> slayerFlags = new HashSet<>();
+        if (bool(() -> config.slayerCannon())) slayerFlags.add("USE_CANNON");
+        map.put(SkillType.SLAYER, SkillRuntimeSettings.builder()
+                .skillType(SkillType.SLAYER)
+                .enabled(true)
+                .targetLevel(NO_TARGET)
+                .mode(enumName(() -> config.slayerStrategy()))
+                .flags(slayerFlags)
                 .build());
 
         map.put(SkillType.HUNTER, SkillRuntimeSettings.builder()
@@ -140,159 +223,45 @@ public class SkillSettingsRegistry {
                 .build());
 
         Set<String> farmingFlags = new HashSet<>();
-        if (bool(() -> config.farmingBirdHouse())) farmingFlags.add("INCLUDE_BIRDHOUSES");
+        if (bool(() -> config.farmingBirdhouses())) farmingFlags.add("INCLUDE_BIRDHOUSES");
         map.put(SkillType.FARMING, SkillRuntimeSettings.builder()
                 .skillType(SkillType.FARMING)
                 .enabled(true)
                 .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.farmingRunMode()))
+                .mode(enumName(() -> config.farmingRunType()))
                 .flags(farmingFlags)
                 .build());
 
-        // ============ ARTISAN / PROCESSING ============
-        Set<String> smithFlags = new HashSet<>();
-        if (bool(() -> config.smithingUseCoalBag())) smithFlags.add("USE_COAL_BAG");
-        map.put(SkillType.SMITHING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.SMITHING)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.smithingMode()))
-                .customList(parseCsv(str(() -> config.smithingBarType())))
-                .flags(smithFlags)
-                .build());
-
-        map.put(SkillType.FLETCHING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.FLETCHING)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.fletchingMode()))
-                .build());
-
-        Set<String> craftingFlags = new HashSet<>();
-        if (bool(() -> config.craftingUsePortable())) craftingFlags.add("USE_PORTABLE");
-        map.put(SkillType.CRAFTING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.CRAFTING)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.craftingMethod()))
-                .flags(craftingFlags)
-                .build());
-
-        Set<String> cookingFlags = new HashSet<>();
-        if (bool(() -> config.cookingGauntlets())) cookingFlags.add("COOKING_GAUNTLETS");
-        map.put(SkillType.COOKING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.COOKING)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.cookingMode()))
-                .flags(cookingFlags)
-                .build());
-
-        Set<String> fmFlags = new HashSet<>();
-        fmFlags.add("FM_MODE:" + enumName(() -> config.fmMode()));
-        map.put(SkillType.FIREMAKING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.FIREMAKING)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.fmMode()))
-                .flags(fmFlags)
-                .build());
-
-        Set<String> herbloreFlags = new HashSet<>();
-        if (bool(() -> config.herbloreUseSecondaries())) herbloreFlags.add("USE_SECONDARIES");
-        map.put(SkillType.HERBLORE, SkillRuntimeSettings.builder()
-                .skillType(SkillType.HERBLORE)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.herbloreMode()))
-                .flags(herbloreFlags)
-                .build());
-
-        Set<String> rcFlags = new HashSet<>();
-        if (bool(() -> config.rcUsePouches())) rcFlags.add("USE_POUCHES");
-        if (bool(() -> config.rcRepairWithNpc())) rcFlags.add("NPC_REPAIR");
-        map.put(SkillType.RUNECRAFTING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.RUNECRAFTING)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.rcMethod()))
-                .flags(rcFlags)
-                .build());
-
-        Set<String> conFlags = new HashSet<>();
-        if (bool(() -> config.constructionUseServant())) conFlags.add("USE_SERVANT");
-        map.put(SkillType.CONSTRUCTION, SkillRuntimeSettings.builder()
-                .skillType(SkillType.CONSTRUCTION)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.constructionMethod()))
-                .flags(conFlags)
-                .build());
-
-        // ============ MISC ============
-        Set<String> slayerFlags = new HashSet<>();
-        if (bool(() -> config.slayerUseCannon())) slayerFlags.add("USE_CANNON");
-        map.put(SkillType.SLAYER, SkillRuntimeSettings.builder()
-                .skillType(SkillType.SLAYER)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.slayerTaskStrategy()))
-                .flags(slayerFlags)
-                .build());
-
-        Set<String> thievingFlags = new HashSet<>();
-        if (bool(() -> config.thievingUseDodgy())) thievingFlags.add("USE_DODGY");
-        map.put(SkillType.THIEVING, SkillRuntimeSettings.builder()
-                .skillType(SkillType.THIEVING)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.thievingMethod()))
-                .flags(thievingFlags)
-                .build());
-
-        Set<String> agilityFlags = new HashSet<>();
-        if (bool(() -> config.agilityUseStamina())) agilityFlags.add("USE_STAMINA");
-        if (bool(() -> config.agilityLootMarks())) agilityFlags.add("LOOT_MARKS");
-        map.put(SkillType.AGILITY, SkillRuntimeSettings.builder()
-                .skillType(SkillType.AGILITY)
-                .enabled(true)
-                .targetLevel(NO_TARGET)
-                .mode(enumName(() -> config.agilityCourseMode()))
-                .flags(agilityFlags)
-                .build());
-
-        cache = map;
+        this.cache = map;
     }
 
-    public SkillRuntimeSettings get(SkillType type) {
-        return cache.get(type);
+    public SkillRuntimeSettings get(SkillType skillType) {
+        return cache.get(skillType);
     }
 
-    /* ================= Helpers ================= */
-
-    private boolean bool(Supplier<Boolean> sup) {
-        try { return sup.get(); } catch (Exception e) { return false; }
-    }
-
-    private String str(Supplier<String> sup) {
+    // Helper methods
+    private static String str(Supplier<String> supplier) {
         try {
-            String s = sup.get();
-            return (s == null || s.isBlank()) ? null : s;
+            return supplier.get();
         } catch (Exception e) {
-            return null;
+            return "";
         }
     }
 
-    private String enumName(Supplier<? extends Enum<?>> sup) {
+    private static boolean bool(Supplier<Boolean> supplier) {
         try {
-            Enum<?> e = sup.get();
-            return e == null ? null : e.name();
-        } catch (Exception ex) {
-            return null;
+            return supplier.get();
+        } catch (Exception e) {
+            return false;
         }
     }
 
-    private Set<String> flagIf(boolean cond, String flag) {
-        return cond ? Set.of(flag) : emptySet();
+    private static String enumName(Supplier<? extends Enum<?>> supplier) {
+        try {
+            Enum<?> e = supplier.get();
+            return e != null ? e.name() : "";
+        } catch (Exception ex) {
+            return "";
+        }
     }
 }

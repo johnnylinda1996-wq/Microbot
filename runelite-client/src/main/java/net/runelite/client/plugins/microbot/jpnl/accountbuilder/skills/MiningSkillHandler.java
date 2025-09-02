@@ -3,6 +3,7 @@ package net.runelite.client.plugins.microbot.jpnl.accountbuilder.skills;
 import net.runelite.api.GameObject;
 import net.runelite.api.Skill;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.ObjectComposition; // added
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.settings.SkillRuntimeSettings;
 import net.runelite.client.plugins.microbot.mining.enums.Rocks;
@@ -108,189 +109,165 @@ public class MiningSkillHandler implements SkillHandler {
         }
 
         if (!Microbot.isLoggedIn()) return;
-        if (Rs2AntibanSettings.actionCooldownActive) return;
 
+        // Initialize player location on first run
         if (initialPlayerLocation == null) {
             initialPlayerLocation = Rs2Player.getWorldLocation();
+            setupAntiban();
         }
 
-        updateCurrentOre();
-
-        if (!currentOre.hasRequiredLevel()) {
-            Microbot.status = "Mining: insufficient level for " + currentOre.name();
+        // Determine current ore type based on mining level
+        currentOre = determineCurrentOre();
+        if (currentOre == null) {
+            Microbot.status = "Mining: no suitable ore for level " + Microbot.getClient().getRealSkillLevel(Skill.MINING);
             return;
         }
 
-        // Dragon pickaxe special attack
-        if (Rs2Equipment.isWearing("Dragon pickaxe") && Rs2Combat.getSpecEnergy() == 1000) {
-            Rs2Combat.setSpecState(true, 1000);
+        // Handle world hopping if too many players
+        if (shouldHopWorld()) {
+            hopToRandomWorld();
             return;
         }
 
+        // Check if player is moving or animating
         if (Rs2Player.isMoving() || Rs2Player.isAnimating()) return;
 
-        if (handleWorldHopping()) return;
+        // Special attack with dragon pickaxe
+        if (Rs2Equipment.isWearing("Dragon pickaxe")) {
+            Rs2Combat.setSpecState(true, 1000);
+        }
 
+        // Mining logic
         if (Rs2Inventory.isFull()) {
             handleFullInventory();
-            return;
+        } else {
+            mineOre();
         }
-
-        WorldPoint bestLocation = findBestMiningLocation();
-        if (bestLocation != null && !isAtMiningLocation(bestLocation)) {
-            walkToMiningLocation(bestLocation);
-            return;
-        }
-
-        mineRock();
     }
 
-    private void updateCurrentOre() {
+    private void setupAntiban() {
+        Rs2Antiban.resetAntibanSettings();
+        Rs2Antiban.antibanSetupTemplates.applyMiningSetup();
+        Rs2AntibanSettings.actionCooldownChance = 0.1;
+    }
+
+    private Rocks determineCurrentOre() {
         int miningLevel = Microbot.getClient().getRealSkillLevel(Skill.MINING);
 
-        if (miningLevel >= 85) {
-            currentOre = Rocks.RUNITE;
-        } else if (miningLevel >= 70) {
-            currentOre = Rocks.ADAMANTITE;
-        } else if (miningLevel >= 55) {
-            currentOre = Rocks.MITHRIL;
-        } else if (miningLevel >= 30) {
-            currentOre = Rocks.COAL;
-        } else if (miningLevel >= 15) {
-            currentOre = Rocks.IRON;
-        } else if (miningLevel >= 1) {
-            currentOre = Rocks.TIN;
-        } else {
-            currentOre = Rocks.COPPER;
-        }
-    }
-
-    private WorldPoint findBestMiningLocation() {
-        List<WorldPoint> locations = MINING_LOCATIONS.get(currentOre);
-        if (locations == null || locations.isEmpty()) {
-            return null;
-        }
-
-        WorldPoint playerLoc = Rs2Player.getWorldLocation();
-
-        return locations.stream()
-                .filter(this::isLocationAccessible)
-                .min(Comparator.comparingInt(loc -> loc.distanceTo(playerLoc)))
-                .orElse(locations.get(0));
-    }
-
-    private boolean isLocationAccessible(WorldPoint location) {
-        return !requiresMembers(location) || Rs2Player.isMember();
-    }
-
-    private boolean requiresMembers(WorldPoint location) {
-        int x = location.getX();
-        int y = location.getY();
-
-        // F2P mining locations
-        if ((x >= 3070 && x <= 3100 && y >= 3410 && y <= 3440) || // Barbarian Village
-                (x >= 3280 && x <= 3320 && y >= 3300 && y <= 3330) || // Al Kharid
-                (x >= 3020 && x <= 3060 && y >= 9700 && y <= 9850)) { // Dwarven mines
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean isAtMiningLocation(WorldPoint location) {
-        return Rs2Player.getWorldLocation().distanceTo(location) <= distanceToStray;
-    }
-
-    private void walkToMiningLocation(WorldPoint location) {
-        if (Rs2Walker.walkTo(location, 3)) {
-            Microbot.status = "Mining: walking to " + currentOre.name() + " location";
-        }
-    }
-
-    private void mineRock() {
-        // Gebruik de correcte API signature
-        GameObject rock = Rs2GameObject.findReachableObject(currentOre.getName(), true, distanceToStray, initialPlayerLocation);
-
-        if (rock != null) {
-            if (Rs2GameObject.interact(rock)) {
-                Rs2Player.waitForXpDrop(Skill.MINING, true);
-                Rs2Antiban.actionCooldown();
-                Rs2Antiban.takeMicroBreakByChance();
-                Microbot.status = "Mining: " + currentOre.name();
+        if ("auto".equals(mode)) {
+            // Find highest level ore we can mine
+            Rocks bestOre = null;
+            for (Rocks ore : Rocks.values()) {
+                if (ore.hasRequiredLevel() && miningLevel >= ore.getMiningLevel()) {
+                    bestOre = ore;
+                }
             }
+            return bestOre;
         } else {
-            Microbot.status = "Mining: no " + currentOre.name() + " found";
+            // Try to use configured ore type
+            try {
+                Rocks configuredOre = Rocks.valueOf(mode.toUpperCase());
+                return configuredOre.hasRequiredLevel() ? configuredOre : null;
+            } catch (IllegalArgumentException e) {
+                return Rocks.COPPER; // Fallback
+            }
         }
     }
 
-    private boolean handleWorldHopping() {
+    private boolean shouldHopWorld() {
         if (maxPlayersInArea <= 0) return false;
 
         WorldPoint localLocation = Rs2Player.getWorldLocation();
-
-        // Gebruik de correcte API voor players
-        long nearbyPlayers = Microbot.getClient().getPlayers().stream()
+        long nearbyPlayers = Microbot.getClient().getTopLevelWorldView().players().stream()
                 .filter(p -> p != null && p != Microbot.getClient().getLocalPlayer())
                 .filter(p -> p.getWorldLocation().distanceTo(localLocation) <= distanceToStray)
-                .filter(p -> p.getAnimation() != -1)
+                .filter(p -> p.getAnimation() != -1) // Mining animation
                 .count();
 
-        if (nearbyPlayers >= maxPlayersInArea) {
-            Microbot.status = "Mining: too many players, hopping...";
-            Rs2Random.waitEx(3200, 800);
+        return nearbyPlayers >= maxPlayersInArea;
+    }
 
-            int world = Login.getRandomWorld(Rs2Player.isMember());
-            boolean hopped = Microbot.hopToWorld(world);
-            if (hopped) {
-                Microbot.status = "Mining: hopped to world " + world;
-                return true;
+    private void hopToRandomWorld() {
+        Microbot.status = "Mining: Too many players nearby. Hopping...";
+        Rs2Random.waitEx(3200, 800);
+
+        int world = Login.getRandomWorld(Rs2Player.isMember());
+        boolean hopped = Microbot.hopToWorld(world);
+        if (hopped) {
+            Microbot.status = "Mining: Hopped to world: " + world;
+        }
+    }
+
+    private void mineOre() {
+        // Find rock using modern API
+        List<GameObject> rocks = Rs2GameObject.getGameObjects(obj -> {
+            ObjectComposition comp = Rs2GameObject.convertToObjectComposition(obj);
+            String name = comp != null ? comp.getName() : null;
+            return name != null && name.equals(currentOre.name()) &&
+                initialPlayerLocation != null && obj.getWorldLocation().distanceTo(initialPlayerLocation) <= distanceToStray;
+        });
+
+        GameObject rock = rocks.isEmpty() ? null : rocks.get(0);
+
+        if (rock != null) {
+            if (Rs2GameObject.interact(rock)) {
+                Microbot.status = "Mining: Mining " + currentOre.name();
+                Rs2Player.waitForXpDrop(Skill.MINING, true);
+                Rs2Antiban.actionCooldown();
+                Rs2Antiban.takeMicroBreakByChance();
+            }
+        } else {
+            // No rock found, try to walk to mining location
+            walkToMiningLocation();
+        }
+    }
+
+    private void walkToMiningLocation() {
+        List<WorldPoint> locations = MINING_LOCATIONS.get(currentOre);
+        if (locations != null && !locations.isEmpty()) {
+            WorldPoint nearestLocation = findNearestLocation(locations);
+            if (nearestLocation != null) {
+                Microbot.status = "Mining: Walking to " + currentOre.name() + " location";
+                Rs2Walker.walkTo(nearestLocation);
+                initialPlayerLocation = nearestLocation;
             }
         }
+    }
 
-        return false;
+    private WorldPoint findNearestLocation(List<WorldPoint> locations) {
+        WorldPoint playerLocation = Rs2Player.getWorldLocation();
+        return locations.stream()
+                .min(Comparator.comparingInt(loc -> playerLocation.distanceTo(loc)))
+                .orElse(null);
     }
 
     private void handleFullInventory() {
         if (useBank) {
-            handleBanking();
+            bankOres();
         } else {
-            handleDropping();
+            dropOres();
         }
     }
 
-    private void handleBanking() {
-        BankLocation nearestBank = Rs2Bank.getNearestBank();
+    private void bankOres() {
+        List<String> itemsToBank = Arrays.asList("Copper ore", "Tin ore", "Iron ore", "Coal", "Silver ore",
+                "Gold ore", "Mithril ore", "Adamantite ore", "Runite ore", "Uncut gem");
 
-        if (nearestBank != null && Rs2Bank.walkToBankAndUseBank(nearestBank)) {
-            if (Rs2Bank.isOpen()) {
-                String[] keepItems = {"pickaxe", "Bronze pickaxe", "Iron pickaxe", "Steel pickaxe",
-                        "Black pickaxe", "Mithril pickaxe", "Adamant pickaxe",
-                        "Rune pickaxe", "Dragon pickaxe", "Crystal pickaxe"};
-
-                Rs2Bank.depositAllExcept(keepItems);
-                Rs2Bank.closeBank();
-
-                WorldPoint miningLoc = findBestMiningLocation();
-                if (miningLoc != null) {
-                    Rs2Walker.walkTo(miningLoc, 3);
-                }
-
-                Microbot.status = "Mining: banked successfully";
-            }
+        if (!Rs2Bank.bankItemsAndWalkBackToOriginalPosition(itemsToBank, initialPlayerLocation, 0, distanceToStray)) {
+            Microbot.status = "Mining: Banking failed, trying again...";
         }
     }
 
-    private void handleDropping() {
-        String[] keepItems = {"pickaxe", "Bronze pickaxe", "Iron pickaxe", "Steel pickaxe",
-                "Black pickaxe", "Mithril pickaxe", "Adamant pickaxe",
-                "Rune pickaxe", "Dragon pickaxe", "Crystal pickaxe"};
-
-        Rs2Inventory.dropAllExcept(keepItems);
-        Microbot.status = "Mining: dropped ores";
+    private void dropOres() {
+        // Drop items except tools and equipment
+        String[] itemsToKeep = {"Pickaxe", "Bronze pickaxe", "Iron pickaxe", "Steel pickaxe", "Black pickaxe",
+                                "Mithril pickaxe", "Adamant pickaxe", "Rune pickaxe", "Dragon pickaxe"};
+        Rs2Inventory.dropAllExcept(itemsToKeep);
+        Microbot.status = "Mining: Dropped ores";
     }
 
-    public Rocks getCurrentOre() { return currentOre; }
+    // Getters voor debugging
     public boolean isEnabled() { return enabled; }
     public String getMode() { return mode; }
-    public WorldPoint getInitialLocation() { return initialPlayerLocation; }
+    public Rocks getCurrentOre() { return currentOre; }
 }

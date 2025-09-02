@@ -249,282 +249,200 @@ public class FishingSkillHandler implements SkillHandler {
             Microbot.status = "Fishing: disabled";
             return;
         }
+
         if (!Microbot.isLoggedIn()) return;
 
-        updateTier();
-        updateCurrentSpot();
+        // Determine current fishing spot based on level and method
+        currentSpot = determineCurrentFishingSpot();
         if (currentSpot == null) {
-            Microbot.status = "Fishing: no suitable spot found for your level";
+            Microbot.status = "Fishing: no suitable spot for level " + Microbot.getClient().getRealSkillLevel(Skill.FISHING);
             return;
         }
 
-        if (!hasRequiredTools()) {
-            Microbot.status = "Fishing: missing tools -> bank";
-            obtainTools();
+        // Check if we need to get equipment
+        if (!hasRequiredEquipment()) {
+            getRequiredEquipment();
             return;
         }
 
+        // Check if inventory is full
         if (Rs2Inventory.isFull()) {
-            if (mode == Mode.BANK) {
-                bankFish();
-            } else {
-                dropFish();
-            }
+            handleFullInventory();
             return;
         }
 
-        WorldPoint target = currentSpot.location;
-        if (target != null && Rs2Player.getWorldLocation().distanceTo(target) > 15) {
-            if (Rs2Walker.walkTo(target, 4)) {
-                Microbot.status = "Fishing: walking to spot";
-            }
+        // Check if we're at the fishing spot
+        if (!isAtFishingSpot()) {
+            walkToFishingSpot();
             return;
         }
 
-        attemptFish();
+        // Do fishing
+        attemptFishing();
     }
 
-    private void attemptFish() {
+    private FishingSpot determineCurrentFishingSpot() {
+        int fishingLevel = Microbot.getClient().getRealSkillLevel(Skill.FISHING);
+
+        if ("AUTO".equals(configuredFishingMethod)) {
+            // Find highest level spot we can fish at
+            FishingSpot bestSpot = null;
+            for (FishingSpot spot : FISHING_SPOTS) {
+                if (fishingLevel >= spot.minLevel) {
+                    bestSpot = spot;
+                }
+            }
+            return bestSpot;
+        } else {
+            // Try to find spot by configured method
+            for (FishingSpot spot : FISHING_SPOTS) {
+                if (spot.name.equalsIgnoreCase(configuredFishingMethod) && fishingLevel >= spot.minLevel) {
+                    return spot;
+                }
+            }
+            // Fallback to auto if configured method not found
+            return determineCurrentFishingSpot();
+        }
+    }
+
+    private boolean hasRequiredEquipment() {
+        if (currentSpot == null) return false;
+
+        // Check for required fishing equipment based on spot
+        if (currentSpot.actions.contains("Net")) {
+            return Rs2Inventory.hasItem("Small fishing net");
+        }
+        if (currentSpot.actions.contains("Bait")) {
+            return Rs2Inventory.hasItem("Fishing rod") && Rs2Inventory.hasItem("Fishing bait");
+        }
+        if (currentSpot.actions.contains("Lure")) {
+            return Rs2Inventory.hasItem("Fly fishing rod") && Rs2Inventory.hasItem("Feather");
+        }
+        if (currentSpot.actions.contains("Cage")) {
+            return Rs2Inventory.hasItem("Lobster pot");
+        }
+        if (currentSpot.actions.contains("Harpoon")) {
+            return Rs2Inventory.hasItem("Harpoon");
+        }
+
+        return true; // Default case
+    }
+
+    private void getRequiredEquipment() {
+        if (!Rs2Bank.openBank()) return;
+
+        Microbot.status = "Fishing: Getting equipment for " + currentSpot.name;
+
+        // Get required equipment based on fishing spot
+        if (currentSpot.actions.contains("Net") && !Rs2Inventory.hasItem("Small fishing net")) {
+            Rs2Bank.withdrawItem(true, "Small fishing net");
+        }
+        if (currentSpot.actions.contains("Bait")) {
+            if (!Rs2Inventory.hasItem("Fishing rod")) {
+                Rs2Bank.withdrawItem(true, "Fishing rod");
+            }
+            if (!Rs2Inventory.hasItem("Fishing bait")) {
+                Rs2Bank.withdrawX(true, "Fishing bait", 1000);
+            }
+        }
+        if (currentSpot.actions.contains("Lure")) {
+            if (!Rs2Inventory.hasItem("Fly fishing rod")) {
+                Rs2Bank.withdrawItem(true, "Fly fishing rod");
+            }
+            if (!Rs2Inventory.hasItem("Feather")) {
+                Rs2Bank.withdrawX(true, "Feather", 1000);
+            }
+        }
+        if (currentSpot.actions.contains("Cage") && !Rs2Inventory.hasItem("Lobster pot")) {
+            Rs2Bank.withdrawItem(true, "Lobster pot");
+        }
+        if (currentSpot.actions.contains("Harpoon") && !Rs2Inventory.hasItem("Harpoon")) {
+            Rs2Bank.withdrawItem(true, "Harpoon");
+        }
+
+        Rs2Bank.closeBank();
+    }
+
+    private boolean isAtFishingSpot() {
+        if (currentSpot == null) return false;
+        return Rs2Player.getWorldLocation().distanceTo(currentSpot.location) <= 10;
+    }
+
+    private void walkToFishingSpot() {
+        if (currentSpot == null) return;
+
+        Microbot.status = "Fishing: Walking to " + currentSpot.name;
+        Rs2Walker.walkTo(currentSpot.location);
+    }
+
+    private void attemptFishing() {
         long now = System.currentTimeMillis();
         if (now - lastAttempt < ATTEMPT_COOLDOWN) return;
         if (Rs2Player.isAnimating() || Rs2Player.isMoving()) return;
 
-        int[] ids = currentSpotIds();
-        List<String> wanted = desiredActions();
-
-        for (int id : ids) {
-            Rs2NpcModel npc = Rs2Npc.getNpc(id);
-            if (npc == null) continue;
-
-            Set<String> npcActions = getAllActions(npc);
-            if (npcActions.isEmpty()) continue;
-
-            for (String w : wanted) {
-                if (containsActionIgnoreCase(npcActions, w)) {
-                    boolean ok = Rs2Npc.interact(npc, w);
-                    if (ok) {
-                        Microbot.status = "Fishing: " + configuredFishingMethod + " (" + w + ")";
-                        lastAttempt = now;
-                        return;
-                    }
-                }
-            }
-        }
-
-        Microbot.status = "Fishing: no spot (retry)";
-        lastAttempt = now;
-    }
-
-    private int[] currentSpotIds() {
-        if (currentSpot != null) {
-            return currentSpot.spotIds.stream().mapToInt(i -> i).toArray();
-        }
-        return new int[0];
-    }
-
-    private List<String> desiredActions() {
-        if (currentSpot == null) {
-            return Collections.emptyList();
-        }
-
-        // If user has configured a specific fishing method, filter actions accordingly
-        if (!"AUTO".equals(configuredFishingMethod)) {
-            List<String> filteredActions = new ArrayList<>();
-            for (String action : currentSpot.actions) {
-                switch (configuredFishingMethod) {
-                    case "NET":
-                        if (action.equalsIgnoreCase("Net")) {
-                            filteredActions.add(action);
-                        }
-                        break;
-                    case "BAIT":
-                        if (action.equalsIgnoreCase("Bait")) {
-                            filteredActions.add(action);
-                        }
-                        break;
-                    case "LURE":
-                        if (action.equalsIgnoreCase("Lure")) {
-                            filteredActions.add(action);
-                        }
-                        break;
-                    case "CAGE":
-                        if (action.equalsIgnoreCase("Cage")) {
-                            filteredActions.add(action);
-                        }
-                        break;
-                    case "HARPOON":
-                        if (action.equalsIgnoreCase("Harpoon")) {
-                            filteredActions.add(action);
-                        }
-                        break;
-                }
-            }
-            return filteredActions.isEmpty() ? currentSpot.actions : filteredActions;
-        }
-
-        // Auto mode: return all available actions for the current tier
-        return currentSpot.actions;
-    }
-
-    private boolean hasRequiredTools() {
-        switch (tier) {
-            case NET_BAIT:
-                return Rs2Inventory.contains("Small fishing net")
-                        || (Rs2Inventory.contains("Fishing rod") && Rs2Inventory.contains("Fishing bait"));
-            case LURE:
-                return Rs2Inventory.contains("Fly fishing rod") && Rs2Inventory.contains("Feather");
-            case CAGE_HARPOON:
-                return Rs2Inventory.contains("Lobster pot") || Rs2Inventory.contains("Harpoon");
-            default:
+        // Find fishing spot NPC via stream filter (replaces deprecated getNearestNpc)
+        Rs2NpcModel fishingSpot = Rs2Npc.getNpcs(npc -> {
+            if (npc == null) return false;
+            if (currentSpot == null) return false;
+            try {
+                net.runelite.api.NPCComposition comp = npc.getComposition();
+                return comp != null && currentSpot.spotIds.contains(comp.getId());
+            } catch (Exception e) {
                 return false;
-        }
-    }
-
-    private void obtainTools() {
-        if (!openNearestBank()) return;
-
-        switch (tier) {
-            case NET_BAIT:
-                if (!Rs2Inventory.contains("Small fishing net") && Rs2Bank.hasItem("Small fishing net"))
-                    Rs2Bank.withdrawOne("Small fishing net");
-                if (!Rs2Inventory.contains("Fishing rod") && Rs2Bank.hasItem("Fishing rod"))
-                    Rs2Bank.withdrawOne("Fishing rod");
-                if (!Rs2Inventory.contains("Fishing bait") && Rs2Bank.hasItem("Fishing bait"))
-                    Rs2Bank.withdrawX("Fishing bait", 300);
-                break;
-            case LURE:
-                if (!Rs2Inventory.contains("Fly fishing rod") && Rs2Bank.hasItem("Fly fishing rod"))
-                    Rs2Bank.withdrawOne("Fly fishing rod");
-                if (!Rs2Inventory.contains("Feather") && Rs2Bank.hasItem("Feather"))
-                    Rs2Bank.withdrawX("Feather", 400);
-                break;
-            case CAGE_HARPOON:
-                if (!Rs2Inventory.contains("Lobster pot") && Rs2Bank.hasItem("Lobster pot"))
-                    Rs2Bank.withdrawOne("Lobster pot");
-                if (!Rs2Inventory.contains("Harpoon") && Rs2Bank.hasItem("Harpoon"))
-                    Rs2Bank.withdrawOne("Harpoon");
-                break;
-            default:
-                break;
-        }
-        Rs2Bank.closeBank();
-    }
-
-    private Set<String> getAllActions(Rs2NpcModel npc) {
-        Set<String> set = new LinkedHashSet<String>();
-        try {
-            NPCComposition trans = npc.getTransformedComposition();
-            NPCComposition base = npc.getComposition();
-            if (trans != null && trans.getActions() != null) {
-                String[] ta = trans.getActions();
-                for (String a : ta) {
-                    if (a != null && !a.isEmpty()) set.add(a);
-                }
             }
-            if (base != null && base.getActions() != null) {
-                String[] ba = base.getActions();
-                for (String a : ba) {
-                    if (a != null && !a.isEmpty()) set.add(a);
-                }
+        }).findFirst().orElse(null);
+
+        if (fishingSpot != null) {
+            String action = getActionForSpot(0); // action selection based on currentSpot.actions
+            if (action != null && Rs2Npc.interact(fishingSpot, action)) {
+                Microbot.status = "Fishing: " + action + " at " + currentSpot.name;
+                lastAttempt = now;
+                Rs2Player.waitForXpDrop(Skill.FISHING, true);
             }
-        } catch (Exception ignored) {}
-        return set;
+        }
     }
 
-    private boolean containsActionIgnoreCase(Set<String> actions, String desired) {
-        for (String a : actions) {
-            if (a.equalsIgnoreCase(desired)) return true;
+    private String getActionForSpot(int spotId) {
+        // Map spot IDs to actions - this would need to be refined based on actual spot IDs
+        if (currentSpot.actions.contains("Net")) return "Net";
+        if (currentSpot.actions.contains("Bait")) return "Bait";
+        if (currentSpot.actions.contains("Lure")) return "Lure";
+        if (currentSpot.actions.contains("Cage")) return "Cage";
+        if (currentSpot.actions.contains("Harpoon")) return "Harpoon";
+        return "Net"; // Default
+    }
+
+    private void handleFullInventory() {
+        if (mode == Mode.BANK) {
+            bankFish();
+        } else {
+            dropFish();
         }
-        return false;
     }
 
     private void bankFish() {
-        if (!openNearestBank()) return;
-        Set<String> keep = new HashSet<String>();
-        switch (tier) {
-            case NET_BAIT:
-                if (Rs2Inventory.contains("Small fishing net")) keep.add("Small fishing net");
-                if (Rs2Inventory.contains("Fishing rod")) keep.add("Fishing rod");
-                if (Rs2Inventory.contains("Fishing bait")) keep.add("Fishing bait");
-                break;
-            case LURE:
-                keep.add("Fly fishing rod");
-                keep.add("Feather");
-                break;
-            case CAGE_HARPOON:
-                if (Rs2Inventory.contains("Lobster pot")) keep.add("Lobster pot");
-                if (Rs2Inventory.contains("Harpoon")) keep.add("Harpoon");
-                break;
-            default:
-                break;
+        if (currentSpot == null) return;
+
+        List<String> fishTypes = Arrays.asList("Raw shrimp", "Raw anchovy", "Raw trout", "Raw salmon",
+                "Raw lobster", "Raw tuna", "Raw swordfish", "Raw shark", "Raw monkfish", "Raw karambwan",
+                "Raw anglerfish", "Raw cavefish", "Raw rocktail");
+
+        if (!Rs2Bank.bankItemsAndWalkBackToOriginalPosition(fishTypes, currentSpot.location, 0, 10)) {
+            Microbot.status = "Fishing: Banking failed, trying again...";
         }
-        Rs2Bank.depositAllExcept(keep.toArray(new String[0]));
-        Rs2Bank.closeBank();
-        Microbot.status = "Fishing: banked";
     }
 
     private void dropFish() {
-        final AtomicInteger dropped = new AtomicInteger(0);
-        Rs2Inventory.dropAll(model -> {
-            String n = model.getName();
-            if (n == null) return false;
-            String ln = n.toLowerCase(Locale.ROOT);
-            if (ln.contains("net") || ln.contains("rod") || ln.contains("bait")
-                    || ln.contains("feather") || ln.contains("harpoon") || ln.contains("pot"))
-                return false;
-            if (isFish(ln)) {
-                dropped.incrementAndGet();
-                return true;
-            }
-            return false;
-        });
-        Microbot.status = "Fishing: dropped " + dropped.get();
+        // Drop fish except fishing equipment
+        String[] equipmentToKeep = {"Small fishing net", "Fishing rod", "Fly fishing rod", "Big fishing net",
+                                   "Harpoon", "Lobster pot", "Feather", "Fishing bait", "Barbarian rod"};
+        Rs2Inventory.dropAllExcept(equipmentToKeep);
+        Microbot.status = "Fishing: Dropped fish";
     }
 
-    private boolean isFish(String ln) {
-        return ln.contains("shrimp") || ln.contains("anchovy") || ln.contains("sardine")
-                || ln.contains("herring") || ln.contains("trout") || ln.contains("salmon")
-                || ln.contains("tuna") || ln.contains("lobster") || ln.contains("bass")
-                || ln.contains("swordfish") || ln.contains("shark") || ln.contains("monkfish")
-                || ln.contains("angler") || ln.contains("karambwan") || ln.contains("manta")
-                || ln.contains("sea turtle") || ln.contains("pike") || ln.contains("eel")
-                || ln.contains("cavefish") || ln.contains("rocktail") || ln.contains("cod");
-    }
-
-    private boolean openNearestBank() {
-        if (currentSpot != null && currentSpot.bankLocation != null) {
-            int maxAttempts = 3;
-            for (int attempt = 0; attempt < maxAttempts; attempt++) {
-                boolean ok = Rs2Bank.walkToBankAndUseBank(currentSpot.bankLocation) && Rs2Bank.isOpen();
-                if (ok) {
-                    Microbot.status = "Fishing: bank opened";
-                    return true;
-                }
-                Microbot.status = "Fishing: opening bank (retry " + (attempt + 1) + ")...";
-                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-            }
-            Microbot.status = "Fishing: failed to open bank!";
-            return false;
-        }
-        // Fallback to old logic if currentSpot is null
-        int combat = Microbot.getClient().getLocalPlayer().getCombatLevel();
-        BankLocation bank = (combat < DRAYNOR_MIN_COMBAT) ? LUMBRIDGE_BANK : DRAYNOR_BANK;
-        int maxAttempts = 3;
-        for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            boolean ok = Rs2Bank.walkToBankAndUseBank(bank) && Rs2Bank.isOpen();
-            if (ok) {
-                Microbot.status = "Fishing: bank opened";
-                return true;
-            }
-            Microbot.status = "Fishing: opening bank (retry " + (attempt + 1) + ")...";
-            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-        }
-        Microbot.status = "Fishing: failed to open bank!";
-        return false;
-    }
-
-    // Debug getters
+    // Getters voor debugging
     public boolean isEnabled() { return enabled; }
-    public String getMode() { return mode.name(); }
-    public String getTierName() { return tier.name(); }
+    public Mode getMode() { return mode; }
+    public FishingSpot getCurrentSpot() { return currentSpot; }
+    public String getConfiguredMethod() { return configuredFishingMethod; }
 }

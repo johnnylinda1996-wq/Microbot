@@ -10,12 +10,16 @@ public class AioSkillTask extends AioTask {
 
     private final SkillType skillType;
     private final int startLevel;
-    private final int targetLevel; // 0 => fallback config
+    private int targetLevel; // made mutable
     private boolean complete;
 
     private int startXp = -1;
     private int lastXp = -1;
     private int xpGained = 0;
+
+    // New: optional time based mode
+    private boolean timeMode; // if true ignore targetLevel, use durationMinutes
+    private int durationMinutes; // 0 => unused
 
     public AioSkillTask(SkillType skillType, int startLevel, int targetLevel) {
         super(TaskType.SKILL);
@@ -24,12 +28,40 @@ public class AioSkillTask extends AioTask {
         this.targetLevel = targetLevel;
     }
 
+    public static AioSkillTask timeTask(SkillType skillType, int startLevel, int minutes) {
+        AioSkillTask t = new AioSkillTask(skillType, startLevel, 0);
+        t.timeMode = true;
+        t.durationMinutes = Math.max(1, minutes);
+        return t;
+    }
+
+    public boolean isTimeMode() { return timeMode; }
+    public int getDurationMinutes() { return durationMinutes; }
+
+    public void setTargetLevel(int newTarget) { this.targetLevel = newTarget; this.timeMode = false; }
+    public void setTimeMode(int minutes) { this.timeMode = true; this.durationMinutes = Math.max(1, minutes); }
+
     @Override
     public boolean isComplete() { return complete; }
     public void markComplete() { complete = true; }
 
+    public long elapsedMs() { return getStartTimestamp() > 0 ? System.currentTimeMillis() - getStartTimestamp() : 0; }
+
+    public boolean checkTimeComplete() {
+        if (timeMode && durationMinutes > 0) {
+            if (elapsedMs() >= durationMinutes * 60_000L) {
+                markComplete();
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public String getDisplay() {
+        if (timeMode) {
+            return "Skill: " + skillType.name() + " (" + durationMinutes + "m)";
+        }
         return "Skill: " + skillType.name() + " -> " + (targetLevel == 0 ? "(cfg)" : targetLevel);
     }
 

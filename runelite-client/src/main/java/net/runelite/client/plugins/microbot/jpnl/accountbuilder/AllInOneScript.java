@@ -11,6 +11,9 @@ import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.QuestType;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.SkillType;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.MinigameType;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.MinigameHandler;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.*;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.quests.*;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.settings.SkillRuntimeSettings;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.settings.SkillSettingsRegistry;
@@ -38,6 +41,7 @@ public class AllInOneScript extends Script {
 
     private final Map<SkillType, SkillHandler> skillHandlers = new EnumMap<>(SkillType.class);
     private final Map<QuestType, QuestHandler> questHandlers = new EnumMap<>(QuestType.class);
+    private final Map<MinigameType, MinigameHandler> minigameHandlers = new EnumMap<>(MinigameType.class);
 
     private final QueueManager queueManager = new QueueManager();
 
@@ -71,6 +75,7 @@ public class AllInOneScript extends Script {
         this.settingsRegistry = new SkillSettingsRegistry(config);
         initSkillHandlers();
         initQuestHandlers();
+        initMinigameHandlers();
     }
 
     /* Queue API */
@@ -89,8 +94,24 @@ public class AllInOneScript extends Script {
         queueManager.add(new AioSkillTask(skillType, current, target));
     }
 
+    public synchronized void addSkillTaskTime(SkillType skillType, int minutes) {
+        int current = Microbot.isLoggedIn() && Microbot.getClient() != null
+                ? Microbot.getClient().getRealSkillLevel(mapToApi(skillType))
+                : 1;
+        queueManager.add(AioSkillTask.timeTask(skillType, current, minutes));
+    }
+
     public synchronized void addQuestTask(QuestType questType) {
         queueManager.add(new AioQuestTask(questType));
+    }
+
+    public synchronized void addMinigameTask(MinigameType minigameType) {
+        queueManager.add(new AioMinigameTask(minigameType));
+    }
+
+    // New overloaded method that accepts duration
+    public synchronized void addMinigameTask(MinigameType minigameType, int durationMinutes) {
+        queueManager.add(new AioMinigameTask(minigameType, durationMinutes));
     }
 
     public synchronized void removeTask(int index) {
@@ -208,6 +229,8 @@ public class AllInOneScript extends Script {
             handleSkillTask((AioSkillTask) currentTask);
         } else if (currentTask instanceof AioQuestTask) {
             handleQuestTask((AioQuestTask) currentTask);
+        } else if (currentTask instanceof AioMinigameTask) {
+            handleMinigameTask((AioMinigameTask) currentTask);
         }
 
         updateStatusAccessor();
@@ -216,6 +239,11 @@ public class AllInOneScript extends Script {
     /* Task handlers */
 
     private void handleSkillTask(AioSkillTask task) {
+        // Time completion check first
+        if (task.checkTimeComplete()) {
+            Microbot.status = "Time done: " + task.getSkillType().name();
+            return;
+        }
         SkillType st = task.getSkillType();
         SkillHandler handler = skillHandlers.get(st);
         if (handler == null) {
@@ -223,25 +251,36 @@ public class AllInOneScript extends Script {
             return;
         }
 
+        // IMPORTANT: Refresh settings from config before executing task
+        settingsRegistry.refresh();
         SkillRuntimeSettings settings = settingsRegistry.get(st);
+
         int target = task.getTargetLevel();
-        if (target <= 0 && settings != null) target = settings.getTargetLevel();
-        if (target <= 0) target = 99;
+        if (!task.isTimeMode()) {
+            if (target <= 0 && settings != null) target = settings.getTargetLevel();
+            if (target <= 0) target = 99;
+        }
 
         // XP tracking update
         task.updateXpTracking();
 
+        // Apply current settings to the handler
         handler.applySettings(settings);
 
-        Skill apiSkill = task.toRuneLiteSkill();
-        int level = (Microbot.getClient() != null) ? Microbot.getClient().getRealSkillLevel(apiSkill) : 0;
+        if (!task.isTimeMode()) {
+            Skill apiSkill = task.toRuneLiteSkill();
+            int level = (Microbot.getClient() != null) ? Microbot.getClient().getRealSkillLevel(apiSkill) : 0;
 
-        if (level >= target) {
-            Microbot.status = "Target reached: " + st.name() + " (" + level + ")";
-            task.markComplete();
-            return;
+            if (level >= target) {
+                Microbot.status = "Target reached: " + st.name() + " (" + level + ")";
+                task.markComplete();
+                return;
+            } else {
+                Microbot.status = "Training " + st.name() + " (" + level + "/" + target + ")";
+            }
         } else {
-            Microbot.status = "Training " + st.name() + " (" + level + "/" + target + ")";
+            long remaining = (task.getDurationMinutes() * 60_000L) - task.elapsedMs();
+            Microbot.status = "Training " + st.name() + " (" + Math.max(0, remaining/1000) + "s left)";
         }
 
         handler.execute();
@@ -256,6 +295,19 @@ public class AllInOneScript extends Script {
         handler.execute();
         Microbot.status = "Quest placeholder: " + task.getQuestType().name();
         task.markComplete();
+    }
+
+    private void handleMinigameTask(AioMinigameTask task) {
+        MinigameHandler handler = minigameHandlers.get(task.getMinigameType());
+        if (handler == null) {
+            Microbot.status = "Minigame (no handler): " + task.getMinigameType().name();
+            task.markComplete();
+            return;
+        }
+        boolean done = false;
+        try { done = handler.execute(); } catch (Exception ex) { Microbot.status = "Minigame err: " + ex.getClass().getSimpleName(); done = true; }
+        Microbot.status = "Minigame: " + task.getMinigameType().name() + (handler.statusDetail().isEmpty()?"":" - "+handler.statusDetail());
+        if (done) task.markComplete();
     }
 
     private void updateAntibanActivity(AioTask task) {
@@ -279,38 +331,38 @@ public class AllInOneScript extends Script {
 
     private void updateStatusAccessor() {
         String name = currentTask == null ? "none" : currentTask.getDisplay();
-        int curLvl = 0;
-        int tgtLvl = 0;
-        long elapsed = 0;
-        int xpGained = 0;
-        double xpPerHour = 0;
-        int xpToTarget = -1;
-        double pctToTarget = 0;
+        int curLvl = 0; int tgtLvl = 0; long elapsed = 0; int xpGained = 0; double xpPerHour = 0; int xpToTarget = -1; double pctToTarget = 0;
 
         if (currentTask instanceof AioSkillTask) {
             AioSkillTask s = (AioSkillTask) currentTask;
             curLvl = s.currentLevel();
-            int t = s.getTargetLevel();
-            SkillRuntimeSettings cfg = settingsRegistry.get(s.getSkillType());
-            if (t <= 0 && cfg != null) t = cfg.getTargetLevel();
-            if (t <= 0) t = 99;
-            tgtLvl = t;
+            if (s.isTimeMode()) {
+                tgtLvl = 0;
+                long durMs = s.getDurationMinutes() * 60_000L;
+                elapsed = s.elapsedMs();
+                pctToTarget = durMs > 0 ? Math.min(100.0, (elapsed * 100.0) / durMs) : 0;
+            } else {
+                int t = s.getTargetLevel();
+                SkillRuntimeSettings cfg = settingsRegistry.get(s.getSkillType());
+                if (t <= 0 && cfg != null) t = cfg.getTargetLevel();
+                if (t <= 0) t = 99; tgtLvl = t;
 
-            int currentXp = s.currentXp();
-            xpGained = s.getXpGained();
-            int targetXp = XpUtil.xpForTarget(t);
-            xpToTarget = Math.max(0, targetXp - currentXp);
-            pctToTarget = XpUtil.percentToTarget(currentXp, t);
+                int currentXp = s.currentXp();
+                xpGained = s.getXpGained();
+                int targetXp = XpUtil.xpForTarget(t);
+                xpToTarget = Math.max(0, targetXp - currentXp);
+                pctToTarget = XpUtil.percentToTarget(currentXp, t);
 
-            if (s.getStartTimestamp() > 0) {
-                elapsed = System.currentTimeMillis() - s.getStartTimestamp();
-                if (elapsed > 0 && xpGained > 0) {
-                    xpPerHour = xpGained * (3600000.0 / elapsed);
+                if (s.getStartTimestamp() > 0) {
+                    elapsed = System.currentTimeMillis() - s.getStartTimestamp();
+                    if (elapsed > 0 && xpGained > 0) {
+                        xpPerHour = xpGained * (3600000.0 / elapsed);
+                    }
                 }
             }
         }
 
-        if (currentTask != null && currentTask.getStartTimestamp() > 0) {
+        if (currentTask != null && currentTask.getStartTimestamp() > 0 && elapsed == 0) {
             elapsed = System.currentTimeMillis() - currentTask.getStartTimestamp();
         }
 
@@ -363,6 +415,22 @@ public class AllInOneScript extends Script {
         questHandlers.put(QuestType.SHEEP_SHEARER, new SheepShearerHandler());
     }
 
+    private void initMinigameHandlers() {
+        // Lightweight placeholder handlers – extend later with real logic
+        register(new BarbarianAssaultHandler());
+        register(new WintertodtHandler());
+        register(new PestControlHandler());
+        register(new NightmareZoneHandler());
+        register(new SoulWarsHandler());
+        register(new GuardiansOfTheRiftHandler());
+        register(new TitheFarmHandler());
+        register(new FishingTrawlerHandler());
+        register(new MageTrainingArenaHandler());
+        register(new TempleTrekkingHandler());
+    }
+
+    private void register(MinigameHandler h) { if (h != null) minigameHandlers.put(h.getType(), h); }
+
     /* Persist */
 
     public void loadQueueFromConfig() {
@@ -397,11 +465,19 @@ public class AllInOneScript extends Script {
                 String kind = o.get("kind").getAsString();
                 if ("SKILL".equals(kind)) {
                     SkillType st = SkillType.valueOf(o.get("id").getAsString());
-                    int target = o.get("target").getAsInt();
-                    list.add(new AioSkillTask(st, 1, target));
+                    if (o.has("mode") && "TIME".equals(o.get("mode").getAsString())) {
+                        int minutes = o.get("minutes").getAsInt();
+                        list.add(AioSkillTask.timeTask(st, 1, minutes));
+                    } else {
+                        int target = o.get("target").getAsInt();
+                        list.add(new AioSkillTask(st, 1, target));
+                    }
                 } else if ("QUEST".equals(kind)) {
                     QuestType qt = QuestType.valueOf(o.get("id").getAsString());
                     list.add(new AioQuestTask(qt));
+                } else if ("MINIGAME".equals(kind)) {
+                    MinigameType mt = MinigameType.valueOf(o.get("id").getAsString());
+                    list.add(new AioMinigameTask(mt));
                 }
             }
             return list;
@@ -422,6 +498,12 @@ public class AllInOneScript extends Script {
                 if (seg.length >= 2) {
                     QuestType qt = QuestType.valueOf(seg[1]);
                     list.add(new AioQuestTask(qt));
+                }
+            } else if (s.startsWith("MINIGAME:")) {
+                String[] seg = s.split(":");
+                if (seg.length >= 2) {
+                    MinigameType mt = MinigameType.valueOf(seg[1]);
+                    list.add(new AioMinigameTask(mt));
                 }
             }
         }
@@ -455,10 +537,19 @@ public class AllInOneScript extends Script {
         if (t instanceof AioSkillTask) {
             AioSkillTask s = (AioSkillTask) t;
             o.addProperty("id", s.getSkillType().name());
-            o.addProperty("target", s.getTargetLevel());
+            if (s.isTimeMode()) {
+                o.addProperty("mode", "TIME");
+                o.addProperty("minutes", s.getDurationMinutes());
+            } else {
+                o.addProperty("mode", "LEVEL");
+                o.addProperty("target", s.getTargetLevel());
+            }
         } else if (t instanceof AioQuestTask) {
             AioQuestTask q = (AioQuestTask) t;
             o.addProperty("id", q.getQuestType().name());
+        } else if (t instanceof AioMinigameTask) {
+            AioMinigameTask m = (AioMinigameTask) t;
+            o.addProperty("id", m.getMinigameType().name());
         }
         return o;
     }
@@ -470,6 +561,9 @@ public class AllInOneScript extends Script {
         } else if (t instanceof AioQuestTask) {
             AioQuestTask q = (AioQuestTask) t;
             sb.append("QUEST:").append(q.getQuestType().name()).append(";");
+        } else if (t instanceof AioMinigameTask) {
+            AioMinigameTask m = (AioMinigameTask) t;
+            sb.append("MINIGAME:").append(m.getMinigameType().name()).append(";");
         }
     }
 
@@ -500,5 +594,102 @@ public class AllInOneScript extends Script {
             case FARMING: return Skill.FARMING;
         }
         return Skill.ATTACK;
+    }
+
+    public synchronized boolean moveTaskUp(int index) {
+        return queueManager.moveUp(index);
+    }
+
+    public synchronized boolean moveTaskDown(int index) {
+        return queueManager.moveDown(index);
+    }
+
+    // --- Added utility operations for enhanced GUI ---
+    public synchronized void shuffleQueue() {
+        List<AioTask> snap = queueManager.snapshot();
+        if (snap.size() < 2) return;
+        Collections.shuffle(snap);
+        queueManager.setNewOrder(snap);
+    }
+
+    public synchronized void moveTaskTop(int index) {
+        List<AioTask> snap = queueManager.snapshot();
+        if (index <= 0 || index >= snap.size()) return;
+        AioTask t = snap.remove(index);
+        snap.add(0, t);
+        queueManager.setNewOrder(snap);
+    }
+
+    public synchronized void moveTaskBottom(int index) {
+        List<AioTask> snap = queueManager.snapshot();
+        if (index < 0 || index >= snap.size()-1) return;
+        AioTask t = snap.remove(index);
+        snap.add(t);
+        queueManager.setNewOrder(snap);
+    }
+
+    public synchronized void duplicateTask(int index) {
+        List<AioTask> snap = queueManager.snapshot();
+        if (index < 0 || index >= snap.size()) return;
+        AioTask orig = snap.get(index);
+        AioTask copy = null;
+        if (orig instanceof AioSkillTask) {
+            AioSkillTask s = (AioSkillTask) orig;
+            if (s.isTimeMode()) {
+                copy = AioSkillTask.timeTask(s.getSkillType(), s.getStartLevel(), s.getDurationMinutes());
+            } else {
+                copy = new AioSkillTask(s.getSkillType(), s.getStartLevel(), s.getTargetLevel());
+            }
+        } else if (orig instanceof AioQuestTask) {
+            copy = new AioQuestTask(((AioQuestTask) orig).getQuestType());
+        } else if (orig instanceof AioMinigameTask) {
+            copy = new AioMinigameTask(((AioMinigameTask) orig).getMinigameType());
+        }
+        if (copy != null) {
+            snap.add(index + 1, copy);
+            queueManager.setNewOrder(snap);
+        }
+    }
+
+    public synchronized void skipCurrentTask() {
+        if (currentTask == null) return;
+        if (currentTask instanceof AioSkillTask) {
+            ((AioSkillTask) currentTask).markComplete();
+        } else if (currentTask instanceof AioQuestTask) {
+            ((AioQuestTask) currentTask).markComplete();
+        } else if (currentTask instanceof AioMinigameTask) {
+            ((AioMinigameTask) currentTask).markComplete();
+        }
+    }
+
+    public synchronized void editSkillTask(int index, Integer newTargetLevel, Integer newMinutes, boolean timeMode) {
+        List<AioTask> snap = queueManager.snapshot();
+        if (index < 0 || index >= snap.size()) return;
+        AioTask t = snap.get(index);
+        if (t instanceof AioSkillTask) {
+            AioSkillTask st = (AioSkillTask) t;
+            if (timeMode) {
+                if (newMinutes != null && newMinutes > 0) {
+                    st.setTimeMode(newMinutes);
+                }
+            } else {
+                if (newTargetLevel != null && newTargetLevel > 0) {
+                    st.setTargetLevel(newTargetLevel);
+                }
+            }
+            queueManager.setNewOrder(snap);
+        }
+    }
+
+    public AllInOneConfig getConfig() {
+        return config;
+    }
+
+    public ConfigManager getConfigManager() {
+        return configManager;
+    }
+
+    public String getConfigGroup() {
+        return configGroup;
     }
 }

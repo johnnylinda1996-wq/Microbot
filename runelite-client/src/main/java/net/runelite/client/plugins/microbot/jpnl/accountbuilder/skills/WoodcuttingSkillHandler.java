@@ -1,281 +1,102 @@
 package net.runelite.client.plugins.microbot.jpnl.accountbuilder.skills;
 
+import net.runelite.api.GameObject;
 import net.runelite.api.Skill;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.ObjectComposition;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.settings.SkillRuntimeSettings;
+import net.runelite.client.plugins.microbot.util.antiban.Rs2Antiban;
+import net.runelite.client.plugins.microbot.util.antiban.Rs2AntibanSettings;
 import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
-import net.runelite.client.plugins.microbot.util.bank.enums.BankLocation;
+import net.runelite.client.plugins.microbot.util.combat.Rs2Combat;
 import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
 import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
+import net.runelite.client.plugins.microbot.woodcutting.enums.WoodcuttingTree;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
+import static net.runelite.api.gameval.ItemID.TINDERBOX;
+
+/**
+ * Complete Woodcutting skill handler for AIO bot system.
+ * Supports all tree types, banking, dropping, firemaking integration.
+ */
 public class WoodcuttingSkillHandler implements SkillHandler {
+
     private boolean enabled = true;
-    private Mode mode = Mode.POWERDROP;
-    private String configuredTreeType = "AUTO"; // AUTO, TREE, OAK, WILLOW, MAPLE, YEW, MAGIC
+    private String mode = "drop"; // drop, bank, firemaking
+    private WoodcuttingTree currentTree = WoodcuttingTree.TREE;
+    private WorldPoint initialPlayerLocation;
+    private boolean useBank = false;
+    private boolean useFiremaking = false;
 
-    private long lastAttempt = 0L;
-    private static final long ATTEMPT_COOLDOWN = 900L;
+    // Woodcutting locations per tree type
+    private static final Map<WoodcuttingTree, List<WorldPoint>> WOODCUTTING_LOCATIONS = new HashMap<>();
 
-    // Enums
-    private enum Mode { POWERDROP, BANK }
+    static {
+        WOODCUTTING_LOCATIONS.put(WoodcuttingTree.TREE, Arrays.asList(
+                new WorldPoint(3077, 3421, 0), // Barbarian Village
+                new WorldPoint(3166, 3412, 0), // Grand Exchange area
+                new WorldPoint(3205, 3434, 0), // Varrock East
+                new WorldPoint(3278, 3390, 0), // Lumbridge
+                new WorldPoint(2721, 3598, 0)  // Seers Village
+        ));
 
-    // Tree type data structure
-    private static class TreeType {
-        String name;
-        String logName;
-        List<Integer> treeIds;
-        int minLevel;
+        WOODCUTTING_LOCATIONS.put(WoodcuttingTree.OAK, Arrays.asList(
+                new WorldPoint(3166, 3412, 0), // Grand Exchange area
+                new WorldPoint(2721, 3598, 0), // Seers Village
+                new WorldPoint(3278, 3390, 0), // Lumbridge
+                new WorldPoint(1308, 3792, 0), // Draynor Village
+                new WorldPoint(2595, 3482, 0)  // Catherby
+        ));
 
-        public TreeType(String name, String logName, List<Integer> treeIds, int minLevel) {
-            this.name = name;
-            this.logName = logName;
-            this.treeIds = treeIds;
-            this.minLevel = minLevel;
-        }
+        WOODCUTTING_LOCATIONS.put(WoodcuttingTree.WILLOW, Arrays.asList(
+                new WorldPoint(1308, 3792, 0), // Draynor Village
+                new WorldPoint(2721, 3598, 0), // Seers Village
+                new WorldPoint(3005, 3114, 0), // Port Sarim
+                new WorldPoint(2595, 3482, 0), // Catherby
+                new WorldPoint(3088, 3233, 0)  // Lumbridge
+        ));
+
+        WOODCUTTING_LOCATIONS.put(WoodcuttingTree.MAPLE, Arrays.asList(
+                new WorldPoint(2721, 3598, 0), // Seers Village
+                new WorldPoint(2595, 3482, 0), // Catherby
+                new WorldPoint(3166, 3412, 0), // Grand Exchange area
+                new WorldPoint(1308, 3792, 0)  // Draynor Village
+        ));
+
+        WOODCUTTING_LOCATIONS.put(WoodcuttingTree.YEW, Arrays.asList(
+                new WorldPoint(2595, 3482, 0), // Catherby
+                new WorldPoint(3087, 3468, 0), // Varrock Palace
+                new WorldPoint(1308, 3792, 0), // Draynor Village
+                new WorldPoint(2756, 3477, 0), // Seers Village
+                new WorldPoint(3209, 3221, 0)  // Lumbridge
+        ));
+
+        WOODCUTTING_LOCATIONS.put(WoodcuttingTree.MAGIC, Arrays.asList(
+                new WorldPoint(2595, 3482, 0), // Catherby
+                new WorldPoint(3087, 3468, 0), // Varrock Palace
+                new WorldPoint(2756, 3477, 0), // Seers Village
+                new WorldPoint(1692, 3508, 0)  // Tree Gnome Stronghold
+        ));
+
+        WOODCUTTING_LOCATIONS.put(WoodcuttingTree.REDWOOD, Arrays.asList(
+                new WorldPoint(1572, 3486, 0) // Tree Gnome Stronghold - Redwood trees
+        ));
     }
-
-    // Woodcutting location data structure
-    private static class WoodcuttingLocation {
-        String name;
-        TreeType treeType;
-        WorldPoint location;
-        BankLocation bankLocation;
-        List<Integer> treeIds;
-
-        public WoodcuttingLocation(String name, TreeType treeType, WorldPoint location, BankLocation bankLocation, List<Integer> treeIds) {
-            this.name = name;
-            this.treeType = treeType;
-            this.location = location;
-            this.bankLocation = bankLocation;
-            this.treeIds = treeIds;
-        }
-    }
-
-    // Tree types with levels and IDs
-    private static final List<TreeType> TREE_TYPES = Arrays.asList(
-            new TreeType("TREE", "Logs", Arrays.asList(1276, 1277, 1278, 1279, 1280, 1330, 1331, 1332, 1365, 1383, 1384), 1),
-            new TreeType("OAK", "Oak logs", Arrays.asList(10820, 10821, 10822, 10823), 15),
-            new TreeType("WILLOW", "Willow logs", Arrays.asList(10819, 10831, 10832, 10833), 30),
-            new TreeType("TEAK", "Teak logs", Arrays.asList(15062, 15063, 15064, 15065), 35),
-            new TreeType("MAPLE", "Maple logs", Arrays.asList(10832, 10833, 4674), 45),
-            new TreeType("MAHOGANY", "Mahogany logs", Arrays.asList(15066, 15067, 15068, 15069), 50),
-            new TreeType("YEW", "Yew logs", Arrays.asList(10822, 10823), 60),
-            new TreeType("MAGIC", "Magic logs", Collections.singletonList(10834), 75),
-            new TreeType("REDWOOD", "Redwood logs", Arrays.asList(29670, 29671), 90)
-    );
-
-    // Woodcutting locations with tree types and bank associations
-    private static final List<WoodcuttingLocation> WOODCUTTING_LOCATIONS = Arrays.asList(
-            // Regular trees
-            new WoodcuttingLocation("Draynor Village Trees",
-                TREE_TYPES.get(0), new WorldPoint(3086, 3232, 0), BankLocation.DRAYNOR_VILLAGE,
-                Arrays.asList(1276, 1277, 1278, 1279, 1280)),
-            new WoodcuttingLocation("Lumbridge Trees",
-                TREE_TYPES.get(0), new WorldPoint(3238, 3241, 0), BankLocation.LUMBRIDGE_TOP,
-                Arrays.asList(1276, 1277, 1278, 1279, 1280)),
-            new WoodcuttingLocation("Al Kharid Trees",
-                TREE_TYPES.get(0), new WorldPoint(3275, 3144, 0), BankLocation.AL_KHARID,
-                Arrays.asList(1276, 1277, 1278, 1279, 1280)),
-
-            // Oak trees
-            new WoodcuttingLocation("Barbarian Village Oaks",
-                TREE_TYPES.get(1), new WorldPoint(3105, 3431, 0), BankLocation.EDGEVILLE,
-                Arrays.asList(10820, 10821, 10822, 10823)),
-            new WoodcuttingLocation("Lumbridge Oaks",
-                TREE_TYPES.get(1), new WorldPoint(3238, 3251, 0), BankLocation.LUMBRIDGE_TOP,
-                Arrays.asList(10820, 10821, 10822, 10823)),
-            new WoodcuttingLocation("Varrock West Oaks",
-                TREE_TYPES.get(1), new WorldPoint(3158, 3408, 0), BankLocation.VARROCK_WEST,
-                Arrays.asList(10820, 10821, 10822, 10823)),
-
-            // Willow trees
-            new WoodcuttingLocation("Draynor Village Willows",
-                TREE_TYPES.get(2), new WorldPoint(3088, 3234, 0), BankLocation.DRAYNOR_VILLAGE,
-                Arrays.asList(10819, 10831, 10832, 10833)),
-            new WoodcuttingLocation("Port Sarim Willows",
-                TREE_TYPES.get(2), new WorldPoint(3060, 3256, 0), BankLocation.DRAYNOR_VILLAGE,
-                Arrays.asList(10819, 10831, 10832, 10833)),
-            new WoodcuttingLocation("Catherby Willows",
-                TREE_TYPES.get(2), new WorldPoint(2808, 3437, 0), BankLocation.CATHERBY,
-                Arrays.asList(10819, 10831, 10832, 10833)),
-
-            // Maple trees
-            new WoodcuttingLocation("Seers Village Maples",
-                TREE_TYPES.get(4), new WorldPoint(2732, 3503, 0), BankLocation.CATHERBY,
-                Arrays.asList(10832, 10833, 4674)),
-
-            // Yew trees
-            new WoodcuttingLocation("Edgeville Yews",
-                TREE_TYPES.get(6), new WorldPoint(3087, 3481, 0), BankLocation.EDGEVILLE,
-                Arrays.asList(10822, 10823)),
-            new WoodcuttingLocation("Falador Yews",
-                TREE_TYPES.get(6), new WorldPoint(3009, 3312, 0), BankLocation.FALADOR_EAST,
-                Arrays.asList(10822, 10823)),
-            new WoodcuttingLocation("Catherby Yews",
-                TREE_TYPES.get(6), new WorldPoint(2754, 3404, 0), BankLocation.CATHERBY,
-                Arrays.asList(10822, 10823)),
-
-            // Magic trees
-            new WoodcuttingLocation("Sorcerer's Tower Magic",
-                TREE_TYPES.get(7), new WorldPoint(2705, 3397, 0), BankLocation.CATHERBY,
-                Collections.singletonList(10834)),
-            new WoodcuttingLocation("Tree Gnome Stronghold Magic",
-                TREE_TYPES.get(7), new WorldPoint(2692, 3425, 0), BankLocation.TREE_GNOME_STRONGHOLD_NIEVE,
-                Collections.singletonList(10834))
-    );
-
-    private TreeType currentTreeType = null;
-    private WoodcuttingLocation currentLocation = null;
 
     @Override
     public void applySettings(SkillRuntimeSettings settings) {
         if (settings != null) {
             enabled = settings.isEnabled();
-
-            // Use the mode string directly as the mode type
-            String modeString = settings.getMode();
-            if (modeString != null) {
-                if (modeString.equals("BANK")) {
-                    mode = Mode.BANK;
-                } else if (modeString.equals("POWERDROP")) {
-                    mode = Mode.POWERDROP;
-                } else {
-                    mode = Mode.POWERDROP; // default
-                }
-            }
-
-            // Extract tree type from flags
-            configuredTreeType = "AUTO"; // Default
-            if (settings.getFlags() != null) {
-                for (String flag : settings.getFlags()) {
-                    if (flag.startsWith("WC_TREE_TYPE:")) {
-                        configuredTreeType = flag.substring("WC_TREE_TYPE:".length());
-                        break;
-                    }
-                }
-            }
+            mode = settings.getMode() != null ? settings.getMode().toLowerCase() : "drop";
+            useBank = "bank".equals(mode);
+            useFiremaking = "firemaking".equals(mode);
         }
-    }
-
-    private void updateCurrentTreeType() {
-        int level = Microbot.getClient().getRealSkillLevel(Skill.WOODCUTTING);
-        TreeType best = null;
-
-        // If user has configured a specific tree type, use that
-        if (!"AUTO".equals(configuredTreeType)) {
-            for (TreeType logType : TREE_TYPES) {
-                if (level >= logType.minLevel && configuredTreeType.equals(logType.name)) {
-                    best = logType;
-                    break;
-                }
-            }
-        } else {
-            // Auto mode: find the highest level logs that are actually available in bank
-            // First try to find the highest level logs we can use
-            for (int i = TREE_TYPES.size() - 1; i >= 0; i--) {
-                TreeType treeType = TREE_TYPES.get(i);
-                if (level >= treeType.minLevel) {
-                    // Check if we have these logs in inventory already, or can get them from bank
-                    if (Rs2Inventory.contains(treeType.logName) ||
-                        (Rs2Bank.isOpen() && Rs2Bank.hasItem(treeType.logName)) ||
-                        (!Rs2Bank.isOpen() && canGetFromBank(treeType.logName))) {
-                        best = treeType;
-                        break;
-                    }
-                }
-            }
-
-            // If no high-level logs found, fallback to any logs we can actually use
-            if (best == null) {
-                for (TreeType treeType : TREE_TYPES) {
-                    if (level >= treeType.minLevel) {
-                        if (Rs2Inventory.contains(treeType.logName) ||
-                            (Rs2Bank.isOpen() && Rs2Bank.hasItem(treeType.logName)) ||
-                            (!Rs2Bank.isOpen() && canGetFromBank(treeType.logName))) {
-                            best = treeType;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Final fallback: if still nothing found, just use the highest level we can access
-            // This ensures we don't get stuck even if bank check fails
-            if (best == null) {
-                for (int i = TREE_TYPES.size() - 1; i >= 0; i--) {
-                    TreeType treeType = TREE_TYPES.get(i);
-                    if (level >= treeType.minLevel) {
-                        best = treeType;
-                        break;
-                    }
-                }
-            }
-        }
-        currentTreeType = best;
-    }
-
-    private boolean canGetFromBank(String itemName) {
-        // Only check bank if we're close to a bank to avoid unnecessary walking
-        if (currentLocation != null && currentLocation.bankLocation != null) {
-            WorldPoint bankLocation = currentLocation.bankLocation.getWorldPoint();
-            if (Rs2Player.getWorldLocation().distanceTo(bankLocation) <= 20) {
-                // We're close to bank, try to check if item is available
-                boolean wasOpen = Rs2Bank.isOpen();
-                if (!wasOpen && Rs2Bank.openBank()) {
-                    boolean hasItem = Rs2Bank.hasItem(itemName);
-                    if (!wasOpen) Rs2Bank.closeBank(); // Close if we opened it
-                    return hasItem;
-                }
-            }
-        }
-        return false; // Assume not available if we can't easily check
-    }
-
-    private void updateCurrentLocation() {
-        WoodcuttingLocation best = null;
-        WorldPoint playerLocation = Microbot.getClient().getLocalPlayer().getWorldLocation();
-
-        // First try to find a location that matches the current tree type
-        for (WoodcuttingLocation location : WOODCUTTING_LOCATIONS) {
-            if (currentTreeType != null && location.treeType.name.equals(currentTreeType.name)) {
-                if (best == null || (location.bankLocation != null &&
-                        Rs2Walker.getDistanceBetween(playerLocation, location.bankLocation.getWorldPoint()) <
-                                Rs2Walker.getDistanceBetween(playerLocation, best.bankLocation.getWorldPoint()))) {
-                    best = location;
-                }
-            }
-        }
-
-        // If no location found for current tree type, fallback to any location we can access
-        if (best == null && currentTreeType != null) {
-            int level = Microbot.getClient().getRealSkillLevel(Skill.WOODCUTTING);
-
-            // Try to find any location we can use (starting from our level down)
-            for (WoodcuttingLocation location : WOODCUTTING_LOCATIONS) {
-                if (level >= location.treeType.minLevel) {
-                    if (best == null || (location.bankLocation != null && best.bankLocation != null &&
-                            Rs2Walker.getDistanceBetween(playerLocation, location.bankLocation.getWorldPoint()) <
-                                    Rs2Walker.getDistanceBetween(playerLocation, best.bankLocation.getWorldPoint()))) {
-                        best = location;
-                    }
-                }
-            }
-
-            // If we found a different location, update our tree type to match
-            if (best != null && !best.treeType.name.equals(currentTreeType.name)) {
-                currentTreeType = best.treeType;
-                Microbot.status = "Woodcutting: switching to " + currentTreeType.name + " (location available)";
-            }
-        }
-
-        currentLocation = best;
     }
 
     @Override
@@ -284,193 +105,172 @@ public class WoodcuttingSkillHandler implements SkillHandler {
             Microbot.status = "Woodcutting: disabled";
             return;
         }
+
         if (!Microbot.isLoggedIn()) return;
 
-        updateCurrentTreeType();
-        updateCurrentLocation();
+        // Initialize player location on first run
+        if (initialPlayerLocation == null) {
+            initialPlayerLocation = Rs2Player.getWorldLocation();
+            setupAntiban();
+        }
 
-        if (currentTreeType == null) {
-            Microbot.status = "Woodcutting: no suitable tree type found for your level";
+        // Determine current tree type based on woodcutting level
+        currentTree = determineCurrentTree();
+        if (currentTree == null) {
+            Microbot.status = "Woodcutting: no suitable tree for level " + Microbot.getClient().getRealSkillLevel(Skill.WOODCUTTING);
             return;
         }
 
-        if (currentLocation == null) {
-            Microbot.status = "Woodcutting: no woodcutting location available";
-            return;
+        // Check if player is moving or animating
+        if (Rs2Player.isMoving() || Rs2Player.isAnimating()) return;
+
+        // Special attack with dragon axe
+        if (Rs2Equipment.isWearing("Dragon axe")) {
+            Rs2Combat.setSpecState(true, 1000);
         }
 
-        if (!hasRequiredTools()) {
-            Microbot.status = "Woodcutting: missing tools -> bank";
-            obtainTools();
-            return;
+        // Woodcutting logic
+        if (useFiremaking) {
+            handleFiremaking();
+        } else if (Rs2Inventory.isFull()) {
+            handleFullInventory();
+        } else {
+            cutTree();
         }
-
-        if (Rs2Inventory.isFull()) {
-            if (mode == Mode.BANK) {
-                bankLogs();
-            } else {
-                dropLogs();
-            }
-            return;
-        }
-
-        WorldPoint target = currentLocation.location;
-        if (target != null && Rs2Player.getWorldLocation().distanceTo(target) > 15) {
-            if (Rs2Walker.walkTo(target, 4)) {
-                Microbot.status = "Woodcutting: walking to trees";
-            }
-            return;
-        }
-
-        attemptWoodcut();
     }
 
-    private boolean hasRequiredTools() {
-        // Check if player has an axe (either equipped or in inventory)
-        // Use more specific checks to avoid false negatives
-        return Rs2Equipment.isWearing("axe") ||
-               Rs2Equipment.isWearing("hatchet") ||
-               Rs2Inventory.hasItem("Bronze axe") ||
-               Rs2Inventory.hasItem("Iron axe") ||
-               Rs2Inventory.hasItem("Steel axe") ||
-               Rs2Inventory.hasItem("Mithril axe") ||
-               Rs2Inventory.hasItem("Adamant axe") ||
-               Rs2Inventory.hasItem("Rune axe") ||
-               Rs2Inventory.hasItem("Dragon axe") ||
-               Rs2Inventory.hasItem("Bronze hatchet") ||
-               Rs2Inventory.hasItem("Iron hatchet") ||
-               Rs2Inventory.hasItem("Steel hatchet") ||
-               Rs2Inventory.hasItem("Mithril hatchet") ||
-               Rs2Inventory.hasItem("Adamant hatchet") ||
-               Rs2Inventory.hasItem("Rune hatchet") ||
-               Rs2Inventory.hasItem("Dragon hatchet");
+    private void setupAntiban() {
+        Rs2Antiban.resetAntibanSettings();
+        Rs2Antiban.antibanSetupTemplates.applyWoodcuttingSetup();
+        Rs2AntibanSettings.dynamicActivity = true;
+        Rs2AntibanSettings.dynamicIntensity = true;
     }
 
-    private void obtainTools() {
-        if (!openNearestBank()) return;
+    private WoodcuttingTree determineCurrentTree() {
+        int woodcuttingLevel = Microbot.getClient().getRealSkillLevel(Skill.WOODCUTTING);
 
-        // Try to get the best axe available
-        String[] axes = {"Dragon axe", "Rune axe", "Adamant axe", "Mithril axe", "Steel axe", "Iron axe", "Bronze axe",
-                         "Dragon hatchet", "Rune hatchet", "Adamant hatchet", "Mithril hatchet", "Steel hatchet", "Iron hatchet", "Bronze hatchet"};
-        boolean foundAxe = false;
+        if ("auto".equals(mode)) {
+            // Find highest level tree we can cut
+            WoodcuttingTree bestTree = null;
+            for (WoodcuttingTree tree : WoodcuttingTree.values()) {
+                if (tree.hasRequiredLevel() && woodcuttingLevel >= tree.getWoodcuttingLevel()) {
+                    bestTree = tree;
+                }
+            }
+            return bestTree;
+        } else {
+            // Try to use configured tree type
+            try {
+                WoodcuttingTree configuredTree = WoodcuttingTree.valueOf(mode.toUpperCase());
+                return configuredTree.hasRequiredLevel() ? configuredTree : null;
+            } catch (IllegalArgumentException e) {
+                return WoodcuttingTree.TREE; // Fallback
+            }
+        }
+    }
 
-        // Double check if we already have an axe before withdrawing
-        if (hasRequiredTools()) {
-            Microbot.status = "Woodcutting: already have axe/hatchet";
-            Rs2Bank.closeBank();
+    private void cutTree() {
+        // Find tree using modern API
+        List<GameObject> trees = Rs2GameObject.getGameObjects(obj -> {
+            ObjectComposition comp = Rs2GameObject.convertToObjectComposition(obj);
+            String name = comp != null ? comp.getName() : null;
+            return name != null && name.contains(currentTree.name()) &&
+                initialPlayerLocation != null && obj.getWorldLocation().distanceTo(initialPlayerLocation) <= 15;
+        });
+
+        GameObject tree = trees.isEmpty() ? null : trees.get(0);
+
+        if (tree != null) {
+            if (Rs2GameObject.interact(tree, "Chop down")) {
+                Microbot.status = "Woodcutting: Cutting " + currentTree.name();
+                Rs2Player.waitForXpDrop(Skill.WOODCUTTING, true);
+                Rs2Antiban.actionCooldown();
+                Rs2Antiban.takeMicroBreakByChance();
+            }
+        } else {
+            // No tree found, try to walk to woodcutting location
+            walkToWoodcuttingLocation();
+        }
+    }
+
+    private void walkToWoodcuttingLocation() {
+        List<WorldPoint> locations = WOODCUTTING_LOCATIONS.get(currentTree);
+        if (locations != null && !locations.isEmpty()) {
+            WorldPoint nearestLocation = findNearestLocation(locations);
+            if (nearestLocation != null) {
+                Microbot.status = "Woodcutting: Walking to " + currentTree.name() + " location";
+                Rs2Walker.walkTo(nearestLocation);
+                initialPlayerLocation = nearestLocation;
+            }
+        }
+    }
+
+    private WorldPoint findNearestLocation(List<WorldPoint> locations) {
+        WorldPoint playerLocation = Rs2Player.getWorldLocation();
+        return locations.stream()
+                .min(Comparator.comparingInt(loc -> playerLocation.distanceTo(loc)))
+                .orElse(null);
+    }
+
+    private void handleFullInventory() {
+        if (useBank) {
+            bankLogs();
+        } else {
+            dropLogs();
+        }
+    }
+
+    private void handleFiremaking() {
+        // If no tinderbox, get one from bank
+        if (!Rs2Inventory.hasItem(TINDERBOX)) {
+            Rs2Bank.openBank();
+            if (Rs2Bank.isOpen()) {
+                Rs2Bank.withdrawItem(true, "Tinderbox");
+                Rs2Bank.closeBank();
+            }
             return;
         }
 
-        // Try to withdraw the best available axe
-        for (String axe : axes) {
-            if (Rs2Bank.hasItem(axe)) {
-                Rs2Bank.withdrawOne(axe);
-                Microbot.status = "Woodcutting: withdrawing " + axe;
-                foundAxe = true;
-                break;
-            }
+        // If no logs, cut more trees
+        if (!Rs2Inventory.hasItem(currentTree.getLog())) {
+            cutTree();
+            return;
         }
 
-        if (!foundAxe) {
-            Microbot.status = "Woodcutting: no axe/hatchet found in bank";
+        // Light fires
+        if (Rs2Inventory.combine("Tinderbox", currentTree.getLog())) {
+            Microbot.status = "Woodcutting: Firemaking " + currentTree.getLog();
+            sleep(3000, 5000); // Wait for fire to light
         }
-
-        Rs2Bank.closeBank();
-    }
-
-    private void attemptWoodcut() {
-        long now = System.currentTimeMillis();
-        if (now - lastAttempt < ATTEMPT_COOLDOWN) return;
-        if (Rs2Player.isAnimating() || Rs2Player.isMoving()) return;
-
-        if (currentLocation == null) return;
-
-        // Try to interact with trees at current location
-        for (int treeId : currentLocation.treeIds) {
-            if (Rs2GameObject.interact(treeId, "Chop down")) {
-                Microbot.status = "Woodcutting: chopping " + currentTreeType.name;
-                lastAttempt = now;
-                return;
-            }
-        }
-
-        Microbot.status = "Woodcutting: no trees found (retry)";
-        lastAttempt = now;
     }
 
     private void bankLogs() {
-        if (!openNearestBank()) return;
+        List<String> itemsToBank = Arrays.asList("Logs", "Oak logs", "Willow logs", "Maple logs",
+                "Yew logs", "Magic logs", "Redwood logs", "Teak logs", "Mahogany logs");
 
-        Set<String> keep = new HashSet<>();
-        // Keep axes
-        if (Rs2Inventory.contains("axe")) keep.add("axe");
-        if (Rs2Inventory.contains("hatchet")) keep.add("hatchet");
-
-        Rs2Bank.depositAllExcept(keep.toArray(new String[0]));
-        Rs2Bank.closeBank();
-        Microbot.status = "Woodcutting: banked logs";
+        if (!Rs2Bank.bankItemsAndWalkBackToOriginalPosition(itemsToBank, initialPlayerLocation, 0, 15)) {
+            Microbot.status = "Woodcutting: Banking failed, trying again...";
+        }
     }
 
     private void dropLogs() {
-        final AtomicInteger dropped = new AtomicInteger(0);
-        Rs2Inventory.dropAll(model -> {
-            String n = model.getName();
-            if (n == null) return false;
-            String ln = n.toLowerCase();
-            // Don't drop axes
-            if (ln.contains("axe") || ln.contains("hatchet")) return false;
-            // Drop logs
-            if (isLog(ln)) {
-                dropped.incrementAndGet();
-                return true;
-            }
-            return false;
-        });
-        Microbot.status = "Woodcutting: dropped " + dropped.get() + " logs";
+        // Drop logs except axe and equipment
+        String[] itemsToKeep = {"Axe", "Bronze axe", "Iron axe", "Steel axe", "Black axe",
+                                "Mithril axe", "Adamant axe", "Rune axe", "Dragon axe", "Infernal axe"};
+        Rs2Inventory.dropAllExcept(itemsToKeep);
+        Microbot.status = "Woodcutting: Dropped logs";
     }
 
-    private boolean isLog(String ln) {
-        return ln.contains("logs") || ln.equals("logs") ||
-               ln.contains("oak") || ln.contains("willow") || ln.contains("maple") ||
-               ln.contains("yew") || ln.contains("magic") || ln.contains("teak") ||
-               ln.contains("mahogany") || ln.contains("redwood");
-    }
-
-    private boolean openNearestBank() {
-        if (currentLocation != null && currentLocation.bankLocation != null) {
-            int maxAttempts = 3;
-            for (int attempt = 0; attempt < maxAttempts; attempt++) {
-                boolean ok = Rs2Bank.walkToBankAndUseBank(currentLocation.bankLocation) && Rs2Bank.isOpen();
-                if (ok) {
-                    Microbot.status = "Woodcutting: bank opened";
-                    return true;
-                }
-                Microbot.status = "Woodcutting: opening bank (retry " + (attempt + 1) + ")...";
-                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-            }
-            Microbot.status = "Woodcutting: failed to open bank!";
-            return false;
+    private void sleep(int min, int max) {
+        try {
+            Thread.sleep(min + (int) (Math.random() * (max - min)));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-
-        // Fallback to nearest bank
-        BankLocation nearestBank = BankLocation.DRAYNOR_VILLAGE; // Default fallback
-        int maxAttempts = 3;
-        for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            boolean ok = Rs2Bank.walkToBankAndUseBank(nearestBank) && Rs2Bank.isOpen();
-            if (ok) {
-                Microbot.status = "Woodcutting: bank opened";
-                return true;
-            }
-            Microbot.status = "Woodcutting: opening bank (retry " + (attempt + 1) + ")...";
-            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-        }
-        Microbot.status = "Woodcutting: failed to open bank!";
-        return false;
     }
 
-    // Debug getters
+    // Getters voor debugging
     public boolean isEnabled() { return enabled; }
-    public String getMode() { return mode.name(); }
-    public String getConfiguredTreeType() { return configuredTreeType; }
-    public String getCurrentTreeType() { return currentTreeType != null ? currentTreeType.name : "None"; }
+    public String getMode() { return mode; }
+    public WoodcuttingTree getCurrentTree() { return currentTree; }
 }

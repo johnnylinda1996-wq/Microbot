@@ -3,9 +3,10 @@ package net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks;
 import lombok.Getter;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.SkillType;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.QuestType;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.MinigameType;
 
 public abstract class AioTask {
-    public enum TaskType { SKILL, QUEST }
+    public enum TaskType { SKILL, QUEST, MINIGAME }
 
     @Getter
     private final TaskType type;
@@ -25,4 +26,5 @@ public abstract class AioTask {
 
     public SkillType getSkillTypeOrNull() { return null; }
     public QuestType getQuestTypeOrNull() { return null; }
+    public MinigameType getMinigameTypeOrNull() { return null; }
 }

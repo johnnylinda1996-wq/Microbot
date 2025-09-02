@@ -18,8 +18,8 @@ import java.awt.*;
  *  - Netjes opruimen bij shutdown
  */
 @PluginDescriptor(
-        name = "AIO All-in-One",
-        description = "Queue-based trainer & quest runner met per-skill instellingen",
+        name = PluginDescriptor.JP96NL + "Account Builder",
+        description = "Queue-based trainer & quest runner",
         tags = {"aio","queue","skills","quests","microbot"},
         enabledByDefault = false
 )
