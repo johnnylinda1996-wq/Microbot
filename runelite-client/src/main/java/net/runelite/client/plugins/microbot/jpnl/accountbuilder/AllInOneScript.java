@@ -267,6 +267,11 @@ public class AllInOneScript extends Script {
         // Apply current settings to the handler
         handler.applySettings(settings);
 
+        // Pass config to handlers that need specific config settings
+        if (handler instanceof FishingSkillHandler) {
+            ((FishingSkillHandler) handler).setConfig(config);
+        }
+
         if (!task.isTimeMode()) {
             Skill apiSkill = task.toRuneLiteSkill();
             int level = (Microbot.getClient() != null) ? Microbot.getClient().getRealSkillLevel(apiSkill) : 0;

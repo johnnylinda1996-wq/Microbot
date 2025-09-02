@@ -1,7 +1,6 @@
 package net.runelite.client.plugins.microbot.jpnl.accountbuilder;
 
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.QuestType;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.SkillType;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.enums.MinigameType;
@@ -540,13 +539,13 @@ public class AllInOneBotGUI extends JFrame {
                 }
 
                 JOptionPane.showMessageDialog(this,
-                    "Queue exported successfully to:\n" + file.getAbsolutePath(),
-                    "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+                        "Queue exported successfully to:\n" + file.getAbsolutePath(),
+                        "Export Complete", JOptionPane.INFORMATION_MESSAGE);
 
             } catch (Exception e) {
                 JOptionPane.showMessageDialog(this,
-                    "Failed to export queue: " + e.getMessage(),
-                    "Export Error", JOptionPane.ERROR_MESSAGE);
+                        "Failed to export queue: " + e.getMessage(),
+                        "Export Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -600,13 +599,13 @@ public class AllInOneBotGUI extends JFrame {
 
                 refreshQueue();
                 JOptionPane.showMessageDialog(this,
-                    String.format("Successfully imported %d tasks from:\n%s", imported, file.getAbsolutePath()),
-                    "Import Complete", JOptionPane.INFORMATION_MESSAGE);
+                        String.format("Successfully imported %d tasks from:\n%s", imported, file.getAbsolutePath()),
+                        "Import Complete", JOptionPane.INFORMATION_MESSAGE);
 
             } catch (Exception e) {
                 JOptionPane.showMessageDialog(this,
-                    "Failed to import queue: " + e.getMessage(),
-                    "Import Error", JOptionPane.ERROR_MESSAGE);
+                        "Failed to import queue: " + e.getMessage(),
+                        "Import Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -728,9 +727,9 @@ public class AllInOneBotGUI extends JFrame {
 
         // Apply button styling
         JButton[] buttons = {addSkillButton, addQuestButton, addMinigameButton, removeSelectedButton,
-                            startButton, pauseButton, clearButton, refreshButton, editSelectedButton,
-                            moveUpButton, moveDownButton, skipButton, hideButton, saveButton,
-                            loadButton, shuffleButton};
+                startButton, pauseButton, clearButton, refreshButton, editSelectedButton,
+                moveUpButton, moveDownButton, skipButton, hideButton, saveButton,
+                loadButton, shuffleButton};
 
         for (JButton b : buttons) {
             if (b != null) {
@@ -745,7 +744,7 @@ public class AllInOneBotGUI extends JFrame {
 
         // Apply label styling
         JLabel[] labels = {currentTaskLabel, statusLabel, levelLabel, xpGainedLabel,
-                          xpPerHourLabel, xpRemainingLabel, elapsedLabel, tasksSummaryLabel};
+                xpPerHourLabel, xpRemainingLabel, elapsedLabel, tasksSummaryLabel};
 
         for (JLabel lab : labels) {
             if (lab != null) {
@@ -844,6 +843,53 @@ public class AllInOneBotGUI extends JFrame {
                 "</body></html>";
 
         JOptionPane.showMessageDialog(this, shortcutsText, "Keyboard Shortcuts", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // NEW: Apply theme to dialog windows
+    private void applyDialogTheme(JDialog dialog) {
+        if (dialog == null) return;
+
+        Color bgPanel = currentTheme.background;
+        Color bgAlt = currentTheme.panelBackground;
+        Color fgColor = currentTheme.foreground;
+
+        // Apply theme to dialog
+        dialog.getContentPane().setBackground(bgPanel);
+
+        // Apply theme to all components in the dialog
+        applyThemeToContainer(dialog.getContentPane(), bgPanel, bgAlt, fgColor);
+
+        dialog.revalidate();
+        dialog.repaint();
+    }
+
+    // Helper method to recursively apply theme to container components
+    private void applyThemeToContainer(Container container, Color bgPanel, Color bgAlt, Color fgColor) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof JPanel) {
+                component.setBackground(bgPanel);
+                component.setForeground(fgColor);
+            } else if (component instanceof JButton) {
+                component.setBackground(bgAlt.darker());
+                component.setForeground(fgColor);
+            } else if (component instanceof JLabel) {
+                component.setForeground(fgColor);
+            } else if (component instanceof JTextField) {
+                component.setBackground(bgAlt);
+                component.setForeground(fgColor);
+            } else if (component instanceof JComboBox) {
+                component.setBackground(bgAlt);
+                component.setForeground(fgColor);
+            } else if (component instanceof JSpinner) {
+                component.setBackground(bgAlt);
+                component.setForeground(fgColor);
+            }
+
+            // Recursively apply to nested containers
+            if (component instanceof Container) {
+                applyThemeToContainer((Container) component, bgPanel, bgAlt, fgColor);
+            }
+        }
     }
 
     private void initComponents() {
@@ -1616,31 +1662,178 @@ public class AllInOneBotGUI extends JFrame {
         if (entry.isCurrent) return;
         int qIdx = toUnderlyingQueueIndex(idx);
         if (qIdx < 0) return;
+
         if (entry.type == AioTask.TaskType.SKILL) {
             AioTask t = script.getQueueSnapshotRaw().get(qIdx);
             if (t instanceof AioSkillTask) {
                 AioSkillTask s = (AioSkillTask) t;
-                if (s.isTimeMode()) {
-                    String in = JOptionPane.showInputDialog(this, "Minutes?", "Edit Duration", JOptionPane.PLAIN_MESSAGE);
-                    if (in == null) return;
+                // Show comprehensive edit dialog for skill tasks
+                if (showEditSkillDialog(s, qIdx)) {
+                    refreshQueue();
+                    selectByQueueIndex(qIdx);
+                }
+            }
+        } else if (entry.type == AioTask.TaskType.QUEST) {
+            // Quest tasks don't have configurable options currently
+            JOptionPane.showMessageDialog(this, "Quest tasks cannot be edited.", "Edit Task", JOptionPane.INFORMATION_MESSAGE);
+        } else if (entry.type == AioTask.TaskType.MINIGAME) {
+            AioTask t = script.getQueueSnapshotRaw().get(qIdx);
+            if (t instanceof AioMinigameTask) {
+                AioMinigameTask m = (AioMinigameTask) t;
+                // Simple duration edit for minigames
+                String input = JOptionPane.showInputDialog(this, "Duration (minutes):", "Edit Minigame Duration", JOptionPane.PLAIN_MESSAGE);
+                if (input != null) {
                     try {
-                        int m = Integer.parseInt(in);
-                        script.editSkillTask(qIdx, null, m, true);
-                        refreshQueue();
-                        selectByQueueIndex(qIdx);
-                    } catch (NumberFormatException ignored) {}
-                } else {
-                    String in = JOptionPane.showInputDialog(this, "Target level?", "Edit Target", JOptionPane.PLAIN_MESSAGE);
-                    if (in == null) return;
-                    try {
-                        int lvl = Integer.parseInt(in);
-                        script.editSkillTask(qIdx, lvl, null, false);
-                        refreshQueue();
-                        selectByQueueIndex(qIdx);
+                        int duration = Integer.parseInt(input);
+                        if (duration > 0) {
+                            // Update minigame duration (would need method in script)
+                            refreshQueue();
+                            selectByQueueIndex(qIdx);
+                        }
                     } catch (NumberFormatException ignored) {}
                 }
             }
         }
+    }
+
+    /**
+     * Shows a comprehensive edit dialog for skill tasks including all configuration options
+     */
+    private boolean showEditSkillDialog(AioSkillTask skillTask, int queueIndex) {
+        SkillType skillType = skillTask.getSkillType();
+
+        JDialog dialog = new JDialog(this, "Edit " + skillType.getDisplayName() + " Task", true);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        // Title with skill icon
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        Icon skillIcon = SKILL_ICONS.get(skillType);
+        if (skillIcon != null) {
+            titlePanel.add(new JLabel(skillIcon));
+        }
+        JLabel titleLabel = new JLabel("Edit " + skillType.getDisplayName() + " Task");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
+        titlePanel.add(titleLabel);
+        mainPanel.add(titlePanel, BorderLayout.NORTH);
+
+        // Configuration panel
+        JPanel configPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        // Target Level vs Time Mode
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
+        JRadioButton levelModeEdit = new JRadioButton("Target Level", !skillTask.isTimeMode());
+        JRadioButton timeModeEdit = new JRadioButton("Duration (minutes)", skillTask.isTimeMode());
+        ButtonGroup modeGroup = new ButtonGroup();
+        modeGroup.add(levelModeEdit);
+        modeGroup.add(timeModeEdit);
+
+        JPanel modePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        modePanel.add(levelModeEdit);
+        modePanel.add(timeModeEdit);
+        configPanel.add(modePanel, gbc);
+
+        // Target level spinner
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1;
+        configPanel.add(new JLabel("Target Level:"), gbc);
+        // Fix: Ensure target level is within valid range (1-99)
+        int currentTargetLevel = skillTask.getTargetLevel();
+        if (currentTargetLevel < 1) currentTargetLevel = 1;
+        if (currentTargetLevel > 99) currentTargetLevel = 99;
+        JSpinner levelSpinner = new JSpinner(new SpinnerNumberModel(currentTargetLevel, 1, 99, 1));
+        levelSpinner.setEnabled(!skillTask.isTimeMode());
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        configPanel.add(levelSpinner, gbc);
+
+        // Duration spinner
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
+        configPanel.add(new JLabel("Duration (min):"), gbc);
+        // Fix: Ensure duration is within valid range (1-10000)
+        int currentDuration = skillTask.getDurationMinutes();
+        if (currentDuration < 1) currentDuration = 1;
+        if (currentDuration > 10000) currentDuration = 10000;
+        JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(currentDuration, 1, 10000, 1));
+        durationSpinner.setEnabled(skillTask.isTimeMode());
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        configPanel.add(durationSpinner, gbc);
+
+        // Add listeners to enable/disable spinners
+        levelModeEdit.addActionListener(e -> {
+            levelSpinner.setEnabled(true);
+            durationSpinner.setEnabled(false);
+        });
+        timeModeEdit.addActionListener(e -> {
+            levelSpinner.setEnabled(false);
+            durationSpinner.setEnabled(true);
+        });
+
+        // Training method selection
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
+        configPanel.add(new JLabel("Training Method:"), gbc);
+        JComboBox<Object> methodCombo = new JComboBox<>();
+        populateMethodCombo(methodCombo, skillType);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        configPanel.add(methodCombo, gbc);
+
+        // Additional skill-specific options
+        Map<String, JComponent> additionalComponents = new HashMap<>();
+        addSkillSpecificOptions(skillType, configPanel, additionalComponents, gbc);
+
+        mainPanel.add(configPanel, BorderLayout.CENTER);
+
+        // Buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JButton okButton = new JButton("Save Changes");
+        JButton cancelButton = new JButton("Cancel");
+
+        final boolean[] result = {false};
+
+        okButton.addActionListener(e -> {
+            try {
+                // Update the task with new values
+                boolean isTimeMode = timeModeEdit.isSelected();
+
+                if (isTimeMode) {
+                    int minutes = (Integer) durationSpinner.getValue();
+                    script.editSkillTask(queueIndex, null, minutes, true);
+                } else {
+                    int targetLevel = (Integer) levelSpinner.getValue();
+                    script.editSkillTask(queueIndex, targetLevel, null, false);
+                }
+
+                // Update config with selected values
+                updateConfigFromDialog(skillType, methodCombo, additionalComponents);
+
+                result[0] = true;
+                dialog.dispose();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(dialog, "Error saving changes: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        cancelButton.addActionListener(e -> {
+            result[0] = false;
+            dialog.dispose();
+        });
+
+        buttonPanel.add(okButton);
+        buttonPanel.add(cancelButton);
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        dialog.add(mainPanel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+
+        // Apply theme
+        applyDialogTheme(dialog);
+
+        dialog.setVisible(true);
+        return result[0];
     }
 
     private void toggleTray() {
@@ -1721,10 +1914,8 @@ public class AllInOneBotGUI extends JFrame {
         } else if (t instanceof AioMinigameTask) {
             AioMinigameTask m = (AioMinigameTask) t;
             e.minigameType = m.getMinigameType();
-            // Check if the minigame task has duration information
             String baseDisplay = m.getMinigameType().getDisplayName();
             try {
-                // Try to get duration from minigame task if available
                 java.lang.reflect.Method getDurationMethod = m.getClass().getMethod("getDurationMinutes");
                 int duration = (Integer) getDurationMethod.invoke(m);
                 if (duration > 0) {
@@ -1732,7 +1923,6 @@ public class AllInOneBotGUI extends JFrame {
                     baseDisplay += " for " + timeDisplay;
                 }
             } catch (Exception ignored) {
-                // Duration not available or method doesn't exist
             }
             e.displayText = baseDisplay;
             e.tooltip = "Minigame task";
@@ -1743,9 +1933,6 @@ public class AllInOneBotGUI extends JFrame {
         return e;
     }
 
-    /**
-     * Formats minutes into a readable format like "1 Hour 30 Minutes" or "45 Minutes"
-     */
     private String formatMinutesToReadable(int totalMinutes) {
         if (totalMinutes < 60) {
             return totalMinutes + " Minutes";
@@ -1792,7 +1979,6 @@ public class AllInOneBotGUI extends JFrame {
         return e;
     }
 
-    // TaskListEntry inner class - THIS WAS MISSING!
     private static class TaskListEntry {
         int number; // 1-based for queued tasks
         String displayText;
@@ -1804,7 +1990,6 @@ public class AllInOneBotGUI extends JFrame {
         boolean isCurrent;
     }
 
-    // Translation and language methods
     private String translate(String key) {
         return currentLanguage.translate(key);
     }
@@ -1829,7 +2014,6 @@ public class AllInOneBotGUI extends JFrame {
         if (levelModeRadio != null) levelModeRadio.setText(translate("Target Level"));
         if (timeModeRadio != null) timeModeRadio.setText(translate("Duration (min)"));
 
-        // Update titled borders
         updatePanelBorder(skillPanelRef, "Skill Task");
         updatePanelBorder(questPanelRef, "Quest Task");
         updatePanelBorder(minigamePanelRef, "Minigame Task");
@@ -1847,37 +2031,12 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    private void applyHoverEffects() {
-        JButton[] buttons = {addSkillButton, addQuestButton, addMinigameButton, removeSelectedButton,
-                startButton, pauseButton, clearButton, refreshButton, editSelectedButton,
-                moveUpButton, moveDownButton, skipButton, hideButton, saveButton,
-                loadButton, shuffleButton};
-        for (JButton b : buttons) {
-            if (b == null) continue;
-            // Update background for current theme
-            final Color normal = currentTheme.panelBackground.darker();
-            b.setBackground(normal);
-            if (b.getClientProperty("hoverInstalled") == Boolean.TRUE) continue;
-            b.addMouseListener(new java.awt.event.MouseAdapter() {
-                @Override public void mouseEntered(java.awt.event.MouseEvent e) { b.setBackground(currentTheme.hoverColor); }
-                @Override public void mouseExited(java.awt.event.MouseEvent e) { b.setBackground(normal); }
-            });
-            b.putClientProperty("hoverInstalled", Boolean.TRUE);
-        }
-    }
-
-    // NEW: Methods for skill training method selection and config updating
-
-    /**
-     * Updates the training method combo box based on the currently selected skill
-     */
     private void updateTrainingMethods() {
         SkillType selectedSkill = (SkillType) skillCombo.getSelectedItem();
         if (selectedSkill == null) return;
 
         trainingMethodCombo.removeAllItems();
 
-        // Populate the combo box based on the selected skill
         switch (selectedSkill) {
             case ATTACK:
             case STRENGTH:
@@ -2015,23 +2174,18 @@ public class AllInOneBotGUI extends JFrame {
                 break;
         }
 
-        // Set the current selection to the config value
         loadCurrentMethodSelection(selectedSkill);
     }
 
-    /**
-     * Loads the current method selection from config for the given skill
-     */
     private void loadCurrentMethodSelection(SkillType skill) {
         try {
             Object currentMethod = getCurrentConfigMethod(skill);
             if (currentMethod != null) {
-                // Find and select the matching item in the combo box
                 for (int i = 0; i < trainingMethodCombo.getItemCount(); i++) {
                     Object item = trainingMethodCombo.getItemAt(i);
                     if (item.toString().equals(currentMethod.toString()) ||
-                        (item instanceof Enum && currentMethod instanceof Enum &&
-                         ((Enum<?>) item).name().equals(((Enum<?>) currentMethod).name()))) {
+                            (item instanceof Enum && currentMethod instanceof Enum &&
+                                    ((Enum<?>) item).name().equals(((Enum<?>) currentMethod).name()))) {
                         trainingMethodCombo.setSelectedIndex(i);
                         break;
                     }
@@ -2042,9 +2196,6 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    /**
-     * Gets the current training method from config for the given skill
-     */
     private Object getCurrentConfigMethod(SkillType skill) {
         switch (skill) {
             case ATTACK: return config.attackStyle();
@@ -2074,9 +2225,6 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    /**
-     * Updates the config when the user selects a different training method
-     */
     private void updateSkillMethodConfig() {
         SkillType selectedSkill = (SkillType) skillCombo.getSelectedItem();
         Object selectedMethod = trainingMethodCombo.getSelectedItem();
@@ -2084,24 +2232,12 @@ public class AllInOneBotGUI extends JFrame {
         if (selectedSkill == null || selectedMethod == null) return;
 
         try {
-            // Update the config based on the skill and selected method
-            // Note: This is a simplified implementation. In a real application,
-            // you would need to use the RuneLite config system to properly update values.
-
-            // For now, we'll just log the selection to show it's working
             System.out.println("Updated " + selectedSkill.getDisplayName() + " method to: " + selectedMethod);
-
-            // TODO: Implement actual config updating using RuneLite's config system
-            // This would involve using ConfigManager.setConfiguration() or similar
-
         } catch (Exception e) {
             System.out.println("Failed to update config for " + selectedSkill + ": " + e.getMessage());
         }
     }
 
-    /**
-     * Shows a skill-specific configuration dialog before adding the task
-     */
     private boolean showSkillConfigDialog(SkillType skillType) {
         JDialog dialog = new JDialog(this, "Configure " + skillType.getDisplayName(), true);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -2109,7 +2245,6 @@ public class AllInOneBotGUI extends JFrame {
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        // Title with skill icon
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         Icon skillIcon = SKILL_ICONS.get(skillType);
         if (skillIcon != null) {
@@ -2121,13 +2256,11 @@ public class AllInOneBotGUI extends JFrame {
         titlePanel.add(titleLabel);
         mainPanel.add(titlePanel, BorderLayout.NORTH);
 
-        // Configuration panel
         JPanel configPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 5, 5, 5);
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Training method selection
         gbc.gridx = 0; gbc.gridy = 0;
         configPanel.add(new JLabel("Training Method:"), gbc);
 
@@ -2136,13 +2269,11 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
         configPanel.add(methodCombo, gbc);
 
-        // Additional skill-specific options
         Map<String, JComponent> additionalComponents = new HashMap<>();
         addSkillSpecificOptions(skillType, configPanel, additionalComponents, gbc);
 
         mainPanel.add(configPanel, BorderLayout.CENTER);
 
-        // Buttons
         JPanel buttonPanel = new JPanel(new FlowLayout());
         JButton okButton = new JButton("OK");
         JButton cancelButton = new JButton("Cancel");
@@ -2150,7 +2281,6 @@ public class AllInOneBotGUI extends JFrame {
         final boolean[] result = {false};
 
         okButton.addActionListener(e -> {
-            // Update config with selected values
             updateConfigFromDialog(skillType, methodCombo, additionalComponents);
             result[0] = true;
             dialog.dispose();
@@ -2169,17 +2299,12 @@ public class AllInOneBotGUI extends JFrame {
         dialog.pack();
         dialog.setLocationRelativeTo(this);
 
-        // Apply theme
         applyDialogTheme(dialog);
 
         dialog.setVisible(true);
-
         return result[0];
     }
 
-    /**
-     * Populates the method combo box for the given skill type
-     */
     private void populateMethodCombo(JComboBox<Object> combo, SkillType skillType) {
         switch (skillType) {
             case ATTACK:
@@ -2297,15 +2422,14 @@ public class AllInOneBotGUI extends JFrame {
                 break;
         }
 
-        // Set current selection from config
         try {
             Object currentMethod = getCurrentConfigMethod(skillType);
             if (currentMethod != null) {
                 for (int i = 0; i < combo.getItemCount(); i++) {
                     Object item = combo.getItemAt(i);
                     if (item.toString().equals(currentMethod.toString()) ||
-                        (item instanceof Enum && currentMethod instanceof Enum &&
-                         ((Enum<?>) item).name().equals(((Enum<?>) currentMethod).name()))) {
+                            (item instanceof Enum && currentMethod instanceof Enum &&
+                                    ((Enum<?>) item).name().equals(((Enum<?>) currentMethod).name()))) {
                         combo.setSelectedIndex(i);
                         break;
                     }
@@ -2316,18 +2440,14 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    /**
-     * Adds skill-specific configuration options to the dialog
-     */
     private void addSkillSpecificOptions(SkillType skillType, JPanel configPanel,
-                                       Map<String, JComponent> components, GridBagConstraints gbc) {
+                                         Map<String, JComponent> components, GridBagConstraints gbc) {
         gbc.gridy++;
 
         switch (skillType) {
             case ATTACK:
             case STRENGTH:
             case DEFENCE:
-                // Food HP percentage
                 gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE;
                 configPanel.add(new JLabel("Food HP %:"), gbc);
                 JSpinner foodHpSpinner = new JSpinner(new SpinnerNumberModel(40, 10, 90, 5));
@@ -2335,7 +2455,6 @@ public class AllInOneBotGUI extends JFrame {
                 configPanel.add(foodHpSpinner, gbc);
                 components.put("foodHP", foodHpSpinner);
 
-                // Use special attack
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox useSpecCheckBox = new JCheckBox("Use Special Attack");
                 configPanel.add(useSpecCheckBox, gbc);
@@ -2343,7 +2462,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case RANGED:
-                // Food HP percentage
                 gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
                 configPanel.add(new JLabel("Food HP %:"), gbc);
                 JSpinner rangedFoodSpinner = new JSpinner(new SpinnerNumberModel(50, 10, 90, 5));
@@ -2351,7 +2469,6 @@ public class AllInOneBotGUI extends JFrame {
                 configPanel.add(rangedFoodSpinner, gbc);
                 components.put("foodHP", rangedFoodSpinner);
 
-                // Use special attack
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox rangedSpecCheckBox = new JCheckBox("Use Special Attack");
                 configPanel.add(rangedSpecCheckBox, gbc);
@@ -2359,7 +2476,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case MAGIC:
-                // Splash protection
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox splashCheckBox = new JCheckBox("Splash Protection");
                 splashCheckBox.setSelected(config.magicSplashProtection());
@@ -2368,14 +2484,12 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case MINING:
-                // 3-tick mining
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox tickMiningCheckBox = new JCheckBox("3-Tick Mining");
                 tickMiningCheckBox.setSelected(config.mining3Tick());
                 configPanel.add(tickMiningCheckBox, gbc);
                 components.put("3tick", tickMiningCheckBox);
 
-                // Ore types
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
                 configPanel.add(new JLabel("Ore Types:"), gbc);
                 JTextField oresField = new JTextField(config.miningOres());
@@ -2385,6 +2499,24 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case FISHING:
+                // Training mode (bank vs drop)
+                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
+                configPanel.add(new JLabel("Training Mode:"), gbc);
+                JComboBox<AllInOneConfig.GatheringMode> fishingModeCombo = new JComboBox<>(AllInOneConfig.GatheringMode.values());
+                fishingModeCombo.setSelectedItem(config.fishingMode());
+                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+                configPanel.add(fishingModeCombo, gbc);
+                components.put("fishingMode", fishingModeCombo);
+
+                // Fishing method
+                gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
+                configPanel.add(new JLabel("Fishing Method:"), gbc);
+                JComboBox<AllInOneConfig.FishingMethod> fishingMethodCombo = new JComboBox<>(AllInOneConfig.FishingMethod.values());
+                fishingMethodCombo.setSelectedItem(config.fishingMethod());
+                gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+                configPanel.add(fishingMethodCombo, gbc);
+                components.put("fishingMethod", fishingMethodCombo);
+
                 // Use special attack
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox fishingSpecCheckBox = new JCheckBox("Use Harpoon Special");
@@ -2394,7 +2526,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case COOKING:
-                // Use cooking gauntlets
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox gauntletsCheckBox = new JCheckBox("Use Cooking Gauntlets");
                 gauntletsCheckBox.setSelected(config.cookingGauntlets());
@@ -2403,14 +2534,12 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case WOODCUTTING:
-                // Collect bird nests
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox nestsCheckBox = new JCheckBox("Collect Bird Nests");
                 nestsCheckBox.setSelected(config.woodcuttingNests());
                 configPanel.add(nestsCheckBox, gbc);
                 components.put("nests", nestsCheckBox);
 
-                // Use dragon axe special
                 gbc.gridy++;
                 JCheckBox axeSpecCheckBox = new JCheckBox("Use Dragon Axe Special");
                 axeSpecCheckBox.setSelected(config.woodcuttingSpecial());
@@ -2419,14 +2548,12 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case AGILITY:
-                // Use stamina potions
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox staminaCheckBox = new JCheckBox("Use Stamina Potions");
                 staminaCheckBox.setSelected(config.agilityStamina());
                 configPanel.add(staminaCheckBox, gbc);
                 components.put("stamina", staminaCheckBox);
 
-                // Collect marks of grace
                 gbc.gridy++;
                 JCheckBox marksCheckBox = new JCheckBox("Collect Marks of Grace");
                 marksCheckBox.setSelected(config.agilityMarks());
@@ -2435,7 +2562,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case THIEVING:
-                // Food HP percentage
                 gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
                 configPanel.add(new JLabel("Food HP %:"), gbc);
                 JSpinner thievingFoodSpinner = new JSpinner(new SpinnerNumberModel(40, 10, 90, 5));
@@ -2443,7 +2569,6 @@ public class AllInOneBotGUI extends JFrame {
                 configPanel.add(thievingFoodSpinner, gbc);
                 components.put("foodHP", thievingFoodSpinner);
 
-                // Use dodgy necklace
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox dodgyCheckBox = new JCheckBox("Use Dodgy Necklace");
                 dodgyCheckBox.setSelected(config.thievingDodgy());
@@ -2452,7 +2577,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case SLAYER:
-                // Use dwarf cannon
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox cannonCheckBox = new JCheckBox("Use Dwarf Cannon");
                 cannonCheckBox.setSelected(config.slayerCannon());
@@ -2461,7 +2585,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case HUNTER:
-                // Trap count
                 gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
                 configPanel.add(new JLabel("Trap Count:"), gbc);
                 JSpinner trapSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 5, 1));
@@ -2470,7 +2593,6 @@ public class AllInOneBotGUI extends JFrame {
                 configPanel.add(trapSpinner, gbc);
                 components.put("traps", trapSpinner);
 
-                // Auto trap replacement
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox relayCheckBox = new JCheckBox("Auto Trap Replacement");
                 relayCheckBox.setSelected(config.hunterRelay());
@@ -2479,7 +2601,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case FARMING:
-                // Compost type
                 gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE; gbc.gridwidth = 1;
                 configPanel.add(new JLabel("Compost Type:"), gbc);
                 JComboBox<AllInOneConfig.CompostType> compostCombo = new JComboBox<>(AllInOneConfig.CompostType.values());
@@ -2488,7 +2609,6 @@ public class AllInOneBotGUI extends JFrame {
                 configPanel.add(compostCombo, gbc);
                 components.put("compost", compostCombo);
 
-                // Include birdhouses
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox birdhousesCheckBox = new JCheckBox("Include Birdhouses");
                 birdhousesCheckBox.setSelected(config.farmingBirdhouses());
@@ -2497,7 +2617,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case CONSTRUCTION:
-                // Use servant
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox servantCheckBox = new JCheckBox("Use Servant");
                 servantCheckBox.setSelected(config.constructionServant());
@@ -2506,7 +2625,6 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case HERBLORE:
-                // Use secondary ingredients
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox secondariesCheckBox = new JCheckBox("Use Secondary Ingredients");
                 secondariesCheckBox.setSelected(config.herbloreSecondaries());
@@ -2515,14 +2633,12 @@ public class AllInOneBotGUI extends JFrame {
                 break;
 
             case RUNECRAFTING:
-                // Use essence pouches
                 gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
                 JCheckBox pouchesCheckBox = new JCheckBox("Use Essence Pouches");
                 pouchesCheckBox.setSelected(config.runecraftingPouches());
                 configPanel.add(pouchesCheckBox, gbc);
                 components.put("pouches", pouchesCheckBox);
 
-                // Repair pouches
                 gbc.gridy++;
                 JCheckBox repairCheckBox = new JCheckBox("Repair Pouches");
                 repairCheckBox.setSelected(config.runecraftingRepair());
@@ -2532,27 +2648,22 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    /**
-     * Updates the config with values from the dialog
-     */
     private void updateConfigFromDialog(SkillType skillType, JComboBox<Object> methodCombo,
-                                      Map<String, JComponent> components) {
+                                        Map<String, JComponent> components) {
         try {
             ConfigManager configManager = script.getConfigManager();
             String configGroup = script.getConfigGroup();
 
-            // Update the method selection
             Object selectedMethod = methodCombo.getSelectedItem();
             if (selectedMethod != null) {
                 String methodKey = getConfigKeyForMethod(skillType);
                 if (methodKey != null) {
                     String value = selectedMethod instanceof Enum ?
-                        ((Enum<?>) selectedMethod).name() : selectedMethod.toString();
+                            ((Enum<?>) selectedMethod).name() : selectedMethod.toString();
                     configManager.setConfiguration(configGroup, methodKey, value);
                 }
             }
 
-            // Update additional skill-specific options
             updateSkillSpecificConfig(skillType, components, configManager, configGroup);
 
         } catch (Exception e) {
@@ -2560,9 +2671,6 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    /**
-     * Gets the config key for the method setting of a skill
-     */
     private String getConfigKeyForMethod(SkillType skillType) {
         switch (skillType) {
             case ATTACK: return "attackStyle";
@@ -2592,11 +2700,8 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    /**
-     * Updates skill-specific configuration options
-     */
     private void updateSkillSpecificConfig(SkillType skillType, Map<String, JComponent> components,
-                                         ConfigManager configManager, String configGroup) {
+                                           ConfigManager configManager, String configGroup) {
         try {
             switch (skillType) {
                 case ATTACK:
@@ -2662,6 +2767,20 @@ public class AllInOneBotGUI extends JFrame {
                     break;
 
                 case FISHING:
+                    if (components.containsKey("fishingMode")) {
+                        JComboBox<?> comboBox = (JComboBox<?>) components.get("fishingMode");
+                        Object selected = comboBox.getSelectedItem();
+                        if (selected instanceof Enum) {
+                            configManager.setConfiguration(configGroup, "fishingMode", ((Enum<?>) selected).name());
+                        }
+                    }
+                    if (components.containsKey("fishingMethod")) {
+                        JComboBox<?> comboBox = (JComboBox<?>) components.get("fishingMethod");
+                        Object selected = comboBox.getSelectedItem();
+                        if (selected instanceof Enum) {
+                            configManager.setConfiguration(configGroup, "fishingMethod", ((Enum<?>) selected).name());
+                        }
+                    }
                     if (components.containsKey("useSpec")) {
                         JCheckBox checkBox = (JCheckBox) components.get("useSpec");
                         configManager.setConfiguration(configGroup, "fishingSpecial", String.valueOf(checkBox.isSelected()));
@@ -2769,46 +2888,5 @@ public class AllInOneBotGUI extends JFrame {
             System.out.println("Failed to update skill-specific config: " + e.getMessage());
         }
     }
-
-    /**
-     * Applies theme to dialog components
-     */
-    private void applyDialogTheme(JDialog dialog) {
-        Color bgPanel = currentTheme.background;
-        Color bgAlt = currentTheme.panelBackground;
-        Color fgColor = currentTheme.foreground;
-
-        dialog.getContentPane().setBackground(bgPanel);
-
-        // Apply theme to all components in dialog
-        applyThemeToContainer(dialog.getContentPane(), bgPanel, bgAlt, fgColor);
-    }
-
-    /**
-     * Recursively applies theme to container components
-     */
-    private void applyThemeToContainer(Container container, Color bgPanel, Color bgAlt, Color fgColor) {
-        for (Component comp : container.getComponents()) {
-            if (comp instanceof JPanel) {
-                comp.setBackground(bgPanel);
-                comp.setForeground(fgColor);
-            } else if (comp instanceof JLabel) {
-                comp.setForeground(fgColor);
-            } else if (comp instanceof JButton) {
-                comp.setBackground(bgAlt);
-                comp.setForeground(fgColor);
-            } else if (comp instanceof JComboBox || comp instanceof JSpinner || comp instanceof JTextField) {
-                comp.setBackground(bgAlt);
-                comp.setForeground(fgColor);
-            } else if (comp instanceof JCheckBox) {
-                comp.setBackground(bgPanel);
-                comp.setForeground(fgColor);
-            }
-
-            if (comp instanceof Container) {
-                applyThemeToContainer((Container) comp, bgPanel, bgAlt, fgColor);
-            }
-        }
-    }
-
 }
+
