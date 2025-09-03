@@ -62,7 +62,7 @@ public class AllInOneBotGUI extends JFrame {
     private boolean showMinigamePanel = true;
     private boolean showStatusPanel = true;
     private boolean showControlPanel = true;
-    private boolean compactMode = false;
+    private boolean compactMode = true;
 
     // Position preservation variables
     private boolean preserveLocation = true;
@@ -147,8 +147,11 @@ public class AllInOneBotGUI extends JFrame {
     private static Icon TRAVEL_CUSTOM_ICON; // NEW
 
     // Keep panel references for language/theme updates
-    private JPanel skillPanelRef, questPanelRef, minigamePanelRef, queuePanelRef, controlPanelRef, statusPanelRef; // existing
-    private JPanel travelPanelRef; // NEW
+    private JPanel skillPanelRef, questPanelRef, minigamePanelRef, queuePanelRef, controlPanelRef, statusPanelRef;
+    private JPanel travelPanelRef;
+    // Inline skill options container and component registry
+    private JPanel skillOptionsPanelInline;
+    private Map<String, JComponent> skillOptionsComponentsInline = new HashMap<>();
 
     // Menu item references for language switching
     private JMenu appearanceMenuRef; // to add language submenu here instead of Help
@@ -169,6 +172,9 @@ public class AllInOneBotGUI extends JFrame {
         super("🚀 Account Builder v0.1");
         this.script = script;
         this.config = script.getConfig(); // Direct config access
+
+        // Must be called before the frame becomes displayable (before pack()/setVisible())
+        setUndecorated(true);
 
         // Set custom icon for the window
         setCustomWindowIcon();
@@ -194,6 +200,8 @@ public class AllInOneBotGUI extends JFrame {
         });
 
         setAlwaysOnTop(false);
+        // Center on screen just before showing (after packing in updateWindowSize)
+        setLocationRelativeTo(null);
         setVisible(true);
 
         uiTimer = new Timer(1000, e -> refreshStatus());
@@ -263,7 +271,8 @@ public class AllInOneBotGUI extends JFrame {
         showMinigamePanel = prefs.getBoolean("showMinigamePanel", true);
         showStatusPanel = prefs.getBoolean("showStatusPanel", true);
         showControlPanel = prefs.getBoolean("showControlPanel", true);
-        compactMode = prefs.getBoolean("compactMode", false);
+        // Default to compact mode and prefer it over any old saved value
+        compactMode = prefs.getBoolean("compactMode", true);
 
         // Language support removed
     }
@@ -304,18 +313,8 @@ public class AllInOneBotGUI extends JFrame {
         }
         appearanceMenu.add(themeMenu);
 
-        // Layout submenu
+        // Layout submenu (compact mode is now the only mode)
         JMenu layoutMenu = new JMenu("Layout Options");
-
-        JCheckBoxMenuItem compactItem = new JCheckBoxMenuItem("Compact Mode");
-        compactItem.setSelected(compactMode);
-        compactItem.addActionListener(e -> {
-            compactMode = compactItem.isSelected();
-            taskList.setFixedCellHeight(compactMode ? 18 : 28);
-            updatePanelVisibility(); // Complete refresh instead of just layout
-            savePreferences();
-        });
-        layoutMenu.add(compactItem);
 
         layoutMenu.addSeparator();
 
@@ -394,9 +393,61 @@ public class AllInOneBotGUI extends JFrame {
         shortcutsItem.addActionListener(e -> showShortcuts());
         helpMenu.add(shortcutsItem);
 
+        // Add working menus directly to the JMenuBar (required for proper menu behavior)
         menuBar.add(appearanceMenu);
         menuBar.add(toolsMenu);
         menuBar.add(helpMenu);
+
+        // Centered title in the menu bar
+        menuBar.add(Box.createHorizontalGlue());
+        JLabel titleLabel;
+        if (getIconImage() != null) {
+            titleLabel = new JLabel("  Account Builder", new ImageIcon(getIconImage()), JLabel.CENTER);
+        } else {
+            titleLabel = new JLabel("  Account Builder");
+        }
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD));
+        titleLabel.setForeground(currentTheme.foreground);
+        menuBar.add(titleLabel);
+
+        // Create a right filler that mirrors the total width of the left menus for perfect centering
+        Component rightFiller = Box.createRigidArea(new Dimension(0, 0));
+        menuBar.add(rightFiller);
+
+        Runnable syncCenter = () -> {
+            int totalLeftWidth = 0;
+            // Sum preferred widths of the first three menus (Appearance, Tools, Help)
+            for (int i = 0; i < Math.min(3, menuBar.getMenuCount()); i++) {
+                JMenu m = menuBar.getMenu(i);
+                if (m != null) {
+                    totalLeftWidth += m.getPreferredSize().width;
+                }
+            }
+            rightFiller.setPreferredSize(new Dimension(totalLeftWidth, 0));
+            rightFiller.setMaximumSize(new Dimension(totalLeftWidth, Integer.MAX_VALUE));
+            menuBar.revalidate();
+            menuBar.repaint();
+        };
+        SwingUtilities.invokeLater(syncCenter);
+        menuBar.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override public void componentResized(java.awt.event.ComponentEvent e) { syncCenter.run(); }
+        });
+
+        // Allow dragging the undecorated window by dragging the menu bar
+        final Point[] dragOffset = {null};
+        java.awt.event.MouseAdapter dragger = new java.awt.event.MouseAdapter() {
+            @Override public void mousePressed(java.awt.event.MouseEvent e) { dragOffset[0] = e.getPoint(); }
+            @Override public void mouseDragged(java.awt.event.MouseEvent e) {
+                if (dragOffset[0] != null) {
+                    Point p = e.getLocationOnScreen();
+                    setLocation(p.x - dragOffset[0].x, p.y - dragOffset[0].y);
+                }
+            }
+        };
+        menuBar.addMouseListener(dragger);
+        menuBar.addMouseMotionListener(dragger);
+        titleLabel.addMouseListener(dragger);
+        titleLabel.addMouseMotionListener(dragger);
 
         setJMenuBar(menuBar);
     }
@@ -411,13 +462,20 @@ public class AllInOneBotGUI extends JFrame {
         SwingUtilities.invokeLater(() -> setLocation(currentPos));
     }
 
+    private JComponent wrapLeft(JComponent comp) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        p.setOpaque(false);
+        p.add(comp);
+        return p;
+    }
+
     private void resetLayout() {
         showSkillPanel = true;
         showQuestPanel = true;
         showMinigamePanel = true;
         showStatusPanel = true;
         showControlPanel = true;
-        compactMode = false;
+        compactMode = true;
         currentTheme = Theme.DARK;
 
         taskList.setFixedCellHeight(compactMode ? 20 : 28);
@@ -667,7 +725,7 @@ public class AllInOneBotGUI extends JFrame {
         JButton[] buttons = {addSkillButton, addQuestButton, addMinigameButton, removeSelectedButton,
                 startButton, pauseButton, clearButton, refreshButton, editSelectedButton,
                 moveUpButton, moveDownButton, skipButton, hideButton, saveButton,
-                loadButton, shuffleButton};
+                loadButton, shuffleButton, addTravelButton};
 
         for (JButton b : buttons) {
             if (b != null) {
@@ -675,8 +733,12 @@ public class AllInOneBotGUI extends JFrame {
                 b.setBackground(bgAlt.darker());
                 b.setForeground(fgColor);
                 b.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(bgAlt.brighter(), 1),
-                        BorderFactory.createEmptyBorder(4,8,4,8)));
+                        BorderFactory.createLineBorder(bgAlt.brighter(), 1, true),
+                        BorderFactory.createEmptyBorder(3,6,3,6)));
+                b.setMargin(new Insets(2,6,2,6));
+                b.setRolloverEnabled(true);
+                b.setOpaque(true);
+                installButtonHover(b, bgAlt.darker(), bgAlt, bgAlt.darker().darker());
             }
         }
 
@@ -691,11 +753,12 @@ public class AllInOneBotGUI extends JFrame {
         }
 
         // Apply combo box styling
-        JComboBox<?>[] combos = {skillCombo, questCombo, minigameCombo};
+        JComboBox<?>[] combos = {skillCombo, questCombo, minigameCombo, trainingMethodCombo, travelCombo};
         for (JComboBox<?> combo : combos) {
             if (combo != null) {
                 combo.setBackground(bgAlt);
                 combo.setForeground(fgColor);
+                combo.setBorder(BorderFactory.createLineBorder(bgAlt.brighter(), 1, true));
             }
         }
 
@@ -705,6 +768,10 @@ public class AllInOneBotGUI extends JFrame {
             if (spinner != null) {
                 spinner.getEditor().getComponent(0).setBackground(bgAlt);
                 spinner.getEditor().getComponent(0).setForeground(fgColor);
+                spinner.setBorder(BorderFactory.createLineBorder(bgAlt.brighter(), 1, true));
+                try {
+                    ((JComponent) spinner.getEditor().getComponent(0)).setBorder(BorderFactory.createEmptyBorder(2,4,2,4));
+                } catch (Exception ignored) {}
             }
         }
 
@@ -739,11 +806,49 @@ public class AllInOneBotGUI extends JFrame {
         if (c instanceof JProgressBar) {
             ((JProgressBar) c).setBackground(bgAlt);
         }
+        // Ensure any dynamically added controls also receive styling
+        if (c instanceof JButton) {
+            JButton b = (JButton) c;
+            // Skip styling for arrow buttons inside combo/spinner to avoid icon glitches
+            boolean insideCombo = SwingUtilities.getAncestorOfClass(JComboBox.class, b) != null;
+            boolean insideSpinner = SwingUtilities.getAncestorOfClass(JSpinner.class, b) != null;
+            boolean isArrow = b instanceof javax.swing.plaf.basic.BasicArrowButton;
+            if (!insideCombo && !insideSpinner && !isArrow) {
+                b.setFocusPainted(false);
+                b.setBackground(currentTheme.panelBackground.darker());
+                b.setForeground(currentTheme.foreground);
+                b.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(currentTheme.panelBackground.brighter(), 1),
+                        BorderFactory.createEmptyBorder(3,6,3,6)));
+                b.setMargin(new Insets(2,6,2,6));
+                b.setRolloverEnabled(true);
+                b.setOpaque(true);
+                installButtonHover(b, currentTheme.panelBackground.darker(), currentTheme.panelBackground, currentTheme.panelBackground.darker().darker());
+            }
+        } else if (c instanceof JComboBox) {
+            JComboBox<?> combo = (JComboBox<?>) c;
+            combo.setBackground(currentTheme.panelBackground);
+            combo.setForeground(currentTheme.foreground);
+        } else if (c instanceof JSpinner) {
+            JSpinner sp = (JSpinner) c;
+            try {
+                Component ed = sp.getEditor().getComponent(0);
+                ed.setBackground(currentTheme.panelBackground);
+                ed.setForeground(currentTheme.foreground);
+            } catch (Exception ignored) {}
+        }
         if (c instanceof JComponent) {
             TitledBorder tb = null;
             if ((tb = getTitledBorder((JComponent)c)) != null) {
                 tb.setTitleColor(Color.WHITE);
                 tb.setTitleFont(bold);
+                // Compact interior padding for titled panels (avoid repeated wrapping)
+                javax.swing.border.Border current = ((JComponent) c).getBorder();
+                if (!(current instanceof javax.swing.border.CompoundBorder)) {
+                    ((JComponent) c).setBorder(BorderFactory.createCompoundBorder(
+                            current,
+                            BorderFactory.createEmptyBorder(2,2,2,2)));
+                }
             }
         }
         if (c instanceof Container) {
@@ -756,6 +861,58 @@ public class AllInOneBotGUI extends JFrame {
     private TitledBorder getTitledBorder(JComponent comp) {
         if (comp.getBorder() instanceof TitledBorder) return (TitledBorder) comp.getBorder();
         return null;
+    }
+
+    // Dialog to choose a TravelLocation for editing a preset travel task
+    private TravelLocation showTravelLocationChooser(TravelLocation current) {
+        // Build a compact panel with a combo box of TravelLocation values
+        JComboBox<TravelLocation> combo = new JComboBox<>(TravelLocation.values());
+        combo.setSelectedItem(current);
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = baseGbc();
+        panel.add(new JLabel("Location:"), gbc);
+        gbc.gridx = 1;
+        panel.add(combo, gbc);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Edit Travel Task", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            return (TravelLocation) combo.getSelectedItem();
+        }
+        return null;
+    }
+
+    // Hover/pressed visual feedback for buttons (no imports needed due to FQCN)
+    private void installButtonHover(final JButton b, final Color normal, final Color hover, final Color pressed) {
+        // Avoid duplicate installation using a client property flag
+        Object flag = b.getClientProperty("hoverInstalled");
+        if (flag instanceof Boolean && (Boolean) flag) {
+            return;
+        }
+        b.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                b.setBackground(hover);
+            }
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                b.setBackground(normal);
+            }
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                b.setBackground(pressed);
+            }
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e) {
+                // If released inside, show hover; otherwise normal
+                java.awt.Point p = e.getPoint();
+                if (p.x >= 0 && p.y >= 0 && p.x < b.getWidth() && p.y < b.getHeight()) {
+                    b.setBackground(hover);
+                } else {
+                    b.setBackground(normal);
+                }
+            }
+        });
+        b.putClientProperty("hoverInstalled", true);
     }
 
     private void showShortcuts() {
@@ -1303,11 +1460,46 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx = 1; skillPanelRef.add(targetLevelSpinner, gbc);
         gbc.gridx = 0; gbc.gridy++; skillPanelRef.add(timeModeRadio, gbc);
         gbc.gridx = 1; skillPanelRef.add(minutesSpinner, gbc);
+        // Inline options under Duration (min) - include full skill-specific options, not just Method
+        gbc.gridx = 0; gbc.gridy++; skillPanelRef.add(new JLabel(translate("Method:")), gbc);
+        // Ensure method choices are populated for current skill before showing
+        SkillType curSkillForMethods = (SkillType) skillCombo.getSelectedItem();
+        if (curSkillForMethods != null) {
+            populateMethodCombo(trainingMethodCombo, curSkillForMethods);
+        }
+        gbc.gridx = 1; skillPanelRef.add(trainingMethodCombo, gbc);
+        // Container for additional skill-specific options
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2;
+        if (skillOptionsPanelInline == null) skillOptionsPanelInline = new JPanel(new GridBagLayout());
+        skillOptionsPanelInline.setOpaque(false);
+        skillPanelRef.add(skillOptionsPanelInline, gbc);
+        // Build options for current selection
+        rebuildInlineSkillOptions();
 
         // Add button
         gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; skillPanelRef.add(addSkillButton, gbc);
 
         return skillPanelRef;
+    }
+
+    // Rebuilds the inline skill-specific options panel under the Method combo
+    private void rebuildInlineSkillOptions() {
+        if (skillOptionsPanelInline == null) return;
+        // Clear existing components and registry
+        skillOptionsPanelInline.removeAll();
+        if (skillOptionsComponentsInline != null) {
+            skillOptionsComponentsInline.clear();
+        }
+        // Determine current skill
+        SkillType st = (SkillType) skillCombo.getSelectedItem();
+        if (st != null) {
+            GridBagConstraints gbc = baseGbc();
+            gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
+            // Populate skill-specific controls into the inline panel
+            addSkillSpecificOptions(st, skillOptionsPanelInline, skillOptionsComponentsInline, gbc);
+        }
+        skillOptionsPanelInline.revalidate();
+        skillOptionsPanelInline.repaint();
     }
 
     private JPanel buildQuestPanel() {
@@ -1360,13 +1552,15 @@ public class AllInOneBotGUI extends JFrame {
         queuePanelRef = new JPanel(new BorderLayout());
         queuePanelRef.setBorder(new TitledBorder(translate("Queue")));
         // Removed filter UI entirely per request
-        JPanel top = new JPanel(new BorderLayout(4,4));
+        // Rework top header: first row = top buttons, second row = counts (single row, left-aligned)
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
         top.setOpaque(false);
-        JPanel topRight = new JPanel(new BorderLayout());
-        topRight.setOpaque(false);
-        topRight.add(tasksSummaryLabel, BorderLayout.NORTH);
-        topRight.add(typeCountsLabel, BorderLayout.SOUTH);
-        top.add(topRight, BorderLayout.EAST);
+        JPanel countsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        countsRow.setOpaque(false);
+        // Ensure labels exist; align next to each other: Tasks, Skills, Quests, Minigames, Travel
+        if (tasksSummaryLabel != null) countsRow.add(tasksSummaryLabel);
+        if (typeCountsLabel != null) countsRow.add(typeCountsLabel);
         queuePanelRef.add(top, BorderLayout.NORTH);
         taskList.setFixedCellHeight(compactMode ? 18 : 28);
         JScrollPane sp = new JScrollPane(taskList);
@@ -1374,17 +1568,28 @@ public class AllInOneBotGUI extends JFrame {
         // ...existing code for buttons (unchanged)...
         JPanel buttonArea = new JPanel(new BorderLayout());
         JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 2));
+        // Ensure clear button labeled
+        if (clearButton != null) {
+            clearButton.setText("Clear Queue");
+            clearButton.setToolTipText("Clear all tasks from the queue");
+        }
         topButtons.add(loadButton);
         topButtons.add(saveButton);
         topButtons.add(refreshButton);
         topButtons.add(clearButton);
-        buttonArea.add(topButtons, BorderLayout.NORTH);
+        // First row: top buttons
+        top.add(topButtons);
+        // Second row: counts row
+        top.add(countsRow);
         JPanel bottomButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 2));
         bottomButtons.add(removeSelectedButton);
         bottomButtons.add(editSelectedButton);
         bottomButtons.add(moveUpButton);
         bottomButtons.add(moveDownButton);
         bottomButtons.add(shuffleButton);
+        // Ensure critical buttons are visible
+        if (clearButton != null) clearButton.setVisible(true);
+        if (shuffleButton != null) shuffleButton.setVisible(true);
         buttonArea.add(bottomButtons, BorderLayout.SOUTH);
         queuePanelRef.add(buttonArea, BorderLayout.SOUTH);
         if (!compactMode) queuePanelRef.setPreferredSize(new Dimension(350, 380));
@@ -1413,12 +1618,16 @@ public class AllInOneBotGUI extends JFrame {
         statusPanelRef = new JPanel(new GridLayout(compactMode ? 0 : 0,1,2,2));
         statusPanelRef.setBorder(new TitledBorder(translate("Status")));
         if (compactMode) {
-            JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT,4,2));
-            row1.add(currentTaskLabel); row1.add(statusLabel);
-            JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT,4,2));
-            row2.add(levelLabel); row2.add(xpGainedLabel); row2.add(xpPerHourLabel);
+            // Strict vertical order as requested
             statusPanelRef.setLayout(new BoxLayout(statusPanelRef, BoxLayout.Y_AXIS));
-            statusPanelRef.add(row1); statusPanelRef.add(row2); statusPanelRef.add(progressBar);
+            statusPanelRef.add(wrapLeft(currentTaskLabel));
+            statusPanelRef.add(wrapLeft(statusLabel));
+            statusPanelRef.add(wrapLeft(levelLabel));
+            statusPanelRef.add(wrapLeft(xpGainedLabel));
+            statusPanelRef.add(wrapLeft(xpPerHourLabel));
+            statusPanelRef.add(wrapLeft(elapsedLabel));
+            statusPanelRef.add(wrapLeft(xpRemainingLabel));
+            statusPanelRef.add(progressBar);
         } else {
             statusPanelRef.add(currentTaskLabel);
             statusPanelRef.add(statusLabel);
@@ -1497,7 +1706,7 @@ public class AllInOneBotGUI extends JFrame {
     // Preserve current position explicitly and avoid centering again
     private void updateWindowSize() {
         if (compactMode) {
-            setMinimumSize(new Dimension(500, 400));
+            setMinimumSize(new Dimension(560, 420));
         } else {
             setMinimumSize(new Dimension(820, 600));
         }
@@ -1516,23 +1725,46 @@ public class AllInOneBotGUI extends JFrame {
             SkillType st = (SkillType) skillCombo.getSelectedItem();
             if (st == null) return; // null guard
 
-            // NEW: Show skill-specific config popup before adding task
-            if (showSkillConfigDialog(st)) {
-                if (timeModeRadio.isSelected()) {
-                    int mins = (int) minutesSpinner.getValue();
-                    script.addSkillTaskTime(st, mins);
-                } else {
-                    int target = (int) targetLevelSpinner.getValue();
-                    script.addSkillTask(st, target);
-                }
-                refreshQueue();
+            // Use inline options (no popup)
+            if (timeModeRadio.isSelected()) {
+                int mins = (int) minutesSpinner.getValue();
+                script.addSkillTaskTime(st, mins);
+            } else {
+                int target = (int) targetLevelSpinner.getValue();
+                script.addSkillTask(st, target);
             }
+            // Persist selected method and inline options to config so the task can use them
+            try {
+                ConfigManager cm = script.getConfigManager();
+                String group = script.getConfigGroup();
+                Object selMethod = trainingMethodCombo.getSelectedItem();
+                String methodKey = getConfigKeyForMethod(st);
+                if (selMethod != null && methodKey != null) {
+                    String value = selMethod instanceof Enum ? ((Enum<?>) selMethod).name() : selMethod.toString();
+                    cm.setConfiguration(group, methodKey, value);
+                }
+                if (skillOptionsComponentsInline != null) {
+                    updateSkillSpecificConfig(st, skillOptionsComponentsInline, cm, group);
+                }
+            } catch (Exception ignored) {}
+            refreshQueue();
 
             // Restore location after adding task
             if (preserveLocation && originalLocation != null) {
                 SwingUtilities.invokeLater(() -> setLocation(originalLocation));
             }
         });
+
+        // Update methods and options when skill changes
+        skillCombo.addActionListener(e -> {
+            SkillType st = (SkillType) skillCombo.getSelectedItem();
+            if (st != null) {
+                populateMethodCombo(trainingMethodCombo, st);
+                rebuildInlineSkillOptions();
+            }
+        });
+        // Update options when method changes
+        trainingMethodCombo.addActionListener(e -> rebuildInlineSkillOptions());
 
         addQuestButton.addActionListener(e -> {
             // Store current location before adding task
@@ -1765,7 +1997,7 @@ public class AllInOneBotGUI extends JFrame {
 
     private GridBagConstraints baseGbc() {
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4,4,4,4);
+        gbc.insets = new Insets(2,2,2,2);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.anchor = GridBagConstraints.WEST;
@@ -1817,17 +2049,12 @@ public class AllInOneBotGUI extends JFrame {
                 AioTravelTask tr = (AioTravelTask) t;
                 // Edit travel task (preset or custom)
                 if (tr.getTravelLocationOrNull() != null) {
-                    // Preset travel task
-                    String input = JOptionPane.showInputDialog(this, "Edit Travel Task:\n\nNew Location (or leave blank to keep current):", "Edit Travel Task", JOptionPane.PLAIN_MESSAGE);
-                    if (input != null && !input.trim().isEmpty()) {
-                        try {
-                            TravelLocation newLocation = TravelLocation.valueOf(input.trim());
-                            script.editTravelTask(qIdx, newLocation);
-                            refreshQueue();
-                            selectByQueueIndex(qIdx);
-                        } catch (Exception e) {
-                            JOptionPane.showMessageDialog(this, "Invalid location: " + e.getMessage(), "Edit Travel Task", JOptionPane.ERROR_MESSAGE);
-                        }
+                    // Preset travel task -> show selection dialog
+                    TravelLocation selected = showTravelLocationChooser(tr.getTravelLocationOrNull());
+                    if (selected != null) {
+                        script.editTravelTask(qIdx, selected);
+                        refreshQueue();
+                        selectByQueueIndex(qIdx);
                     }
                 } else {
                     // Custom travel task
@@ -2021,6 +2248,7 @@ public class AllInOneBotGUI extends JFrame {
         // Apply theme
         applyDialogTheme(dialog);
 
+        // Center window on show
         dialog.setVisible(true);
         return result[0];
     }
@@ -2031,7 +2259,8 @@ public class AllInOneBotGUI extends JFrame {
             return;
         }
         try {
-            if (tray == null) {
+            // Hide when no tray icon exists; restore when it does
+            if (trayIcon == null) {
                 tray = SystemTray.getSystemTray();
                 Image img = getIconImage();
                 if (img == null) img = new BufferedImage(16,16,BufferedImage.TYPE_INT_ARGB);
