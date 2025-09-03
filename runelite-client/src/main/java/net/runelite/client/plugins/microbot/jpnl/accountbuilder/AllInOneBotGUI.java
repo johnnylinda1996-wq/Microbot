@@ -190,8 +190,8 @@ public class AllInOneBotGUI extends JFrame {
         updateWindowSize();
         setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE); // Changed to hide when X is clicked
 
-        // Set initial position
-        setLocationRelativeTo(null);
+        // Manually center on screen (more reliable for undecorated frames)
+        centerOnScreen();
 
         // Store location after everything is set up
         SwingUtilities.invokeLater(() -> {
@@ -200,8 +200,6 @@ public class AllInOneBotGUI extends JFrame {
         });
 
         setAlwaysOnTop(false);
-        // Center on screen just before showing (after packing in updateWindowSize)
-        setLocationRelativeTo(null);
         setVisible(true);
 
         uiTimer = new Timer(1000, e -> refreshStatus());
@@ -398,8 +396,10 @@ public class AllInOneBotGUI extends JFrame {
         menuBar.add(toolsMenu);
         menuBar.add(helpMenu);
 
-        // Centered title in the menu bar
-        menuBar.add(Box.createHorizontalGlue());
+        // Centered title in the menu bar using symmetric fillers that mirror left menu widths
+        // Sequence: [Appearance][Tools][Help][leftFiller][Title][rightFiller]
+        Component leftFiller = Box.createRigidArea(new Dimension(0, 0));
+        menuBar.add(leftFiller);
         JLabel titleLabel;
         if (getIconImage() != null) {
             titleLabel = new JLabel("  Account Builder", new ImageIcon(getIconImage()), JLabel.CENTER);
@@ -410,7 +410,6 @@ public class AllInOneBotGUI extends JFrame {
         titleLabel.setForeground(currentTheme.foreground);
         menuBar.add(titleLabel);
 
-        // Create a right filler that mirrors the total width of the left menus for perfect centering
         Component rightFiller = Box.createRigidArea(new Dimension(0, 0));
         menuBar.add(rightFiller);
 
@@ -423,7 +422,11 @@ public class AllInOneBotGUI extends JFrame {
                     totalLeftWidth += m.getPreferredSize().width;
                 }
             }
-            rightFiller.setPreferredSize(new Dimension(totalLeftWidth, 0));
+            // Mirror left menu width on both sides of the title
+            Dimension d = new Dimension(totalLeftWidth, 0);
+            leftFiller.setPreferredSize(d);
+            leftFiller.setMaximumSize(new Dimension(totalLeftWidth, Integer.MAX_VALUE));
+            rightFiller.setPreferredSize(d);
             rightFiller.setMaximumSize(new Dimension(totalLeftWidth, Integer.MAX_VALUE));
             menuBar.revalidate();
             menuBar.repaint();
@@ -1592,8 +1595,7 @@ public class AllInOneBotGUI extends JFrame {
         if (shuffleButton != null) shuffleButton.setVisible(true);
         buttonArea.add(bottomButtons, BorderLayout.SOUTH);
         queuePanelRef.add(buttonArea, BorderLayout.SOUTH);
-        if (!compactMode) queuePanelRef.setPreferredSize(new Dimension(350, 380));
-        else queuePanelRef.setPreferredSize(new Dimension(300, 320));
+        // Do not force a preferred size; let layout and content dictate height so bottom buttons are visible in compact mode
         return queuePanelRef;
     }
 
@@ -1714,6 +1716,20 @@ public class AllInOneBotGUI extends JFrame {
         if (lastKnownLocation != null) setLocation(lastKnownLocation); // restore
     }
     // ================== END MODIFICATIONS ==================
+
+    // Reliable centering for undecorated frames
+    private void centerOnScreen() {
+        try {
+            // Ensure we have a valid size
+            if (getWidth() == 0 || getHeight() == 0) {
+                pack();
+            }
+            Point center = GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
+            int x = center.x - getWidth() / 2;
+            int y = center.y - getHeight() / 2;
+            setLocation(Math.max(0, x), Math.max(0, y));
+        } catch (Exception ignored) {}
+    }
 
     private void attachListeners() {
         addSkillButton.addActionListener(e -> {
@@ -1931,11 +1947,13 @@ public class AllInOneBotGUI extends JFrame {
         tasksSummaryLabel.setText("Tasks: " + raw.size());
         typeCountsLabel.setText("<html><span style='color:#6fa8dc'>Skills: " + skillCount + "</span> | <span style='color:#f1c232'>Quests: " + questCount + "</span> | <span style='color:#b4a7d6'>Minigames: " + miniCount + "</span> | <span style='color:#93c47d'>Travel: " + travelCount + "</span></html>");
         taskList.repaint();
-        // Do NOT resize or reposition window on periodic refresh
-        if (lastKnownLocation != null) {
-            SwingUtilities.invokeLater(() -> setLocation(lastKnownLocation));
-        } else {
-            SwingUtilities.invokeLater(() -> setLocation(keep));
+        // Do NOT resize or reposition window on periodic refresh before the frame is shown/initialized
+        if (isShowing() && locationInitialized) {
+            if (lastKnownLocation != null) {
+                SwingUtilities.invokeLater(() -> setLocation(lastKnownLocation));
+            } else {
+                SwingUtilities.invokeLater(() -> setLocation(keep));
+            }
         }
     }
 
