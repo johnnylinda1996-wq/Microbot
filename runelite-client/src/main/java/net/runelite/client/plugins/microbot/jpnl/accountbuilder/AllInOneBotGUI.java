@@ -924,7 +924,7 @@ public class AllInOneBotGUI extends JFrame {
 
         generateControlIcons();
         applyControlIcons();
-        shrinkPrimaryControlButtons(); // ensure buttons shrink
+        enhancePrimaryControlButtons(); // use enhanced sizing instead of shrinking
         applyLanguage(); // initial language application
     }
 
@@ -1127,11 +1127,11 @@ public class AllInOneBotGUI extends JFrame {
     private void populateTravelCombo() {
         if (travelCombo == null) return;
         DefaultComboBoxModel<Object> model = new DefaultComboBoxModel<>();
-        model.addElement("--- F2P Locations ---");
+        model.addElement("--- Locations ---");
         for (TravelLocation tl : TravelLocation.values()) if (tl.isF2p()) model.addElement(tl);
         model.addElement("--- P2P Locations ---");
         for (TravelLocation tl : TravelLocation.values()) if (!tl.isF2p()) model.addElement(tl);
-        model.addElement("Custom...");
+        model.addElement("Custom Location...");
         travelCombo.setModel(model);
         travelCombo.setRenderer(new TravelLocationRenderer());
     }
@@ -1405,7 +1405,7 @@ public class AllInOneBotGUI extends JFrame {
         controlPanelRef.add(pauseButton);
         controlPanelRef.add(skipButton);
         controlPanelRef.add(hideButton);
-        shrinkPrimaryControlButtons();
+        enhancePrimaryControlButtons(); // apply enhanced sizing
         return controlPanelRef;
     }
 
@@ -2209,20 +2209,34 @@ public class AllInOneBotGUI extends JFrame {
         updatePanelBorder(travelPanelRef, "Travel Task");
     }
 
-    // NEW: stronger shrink for primary control buttons (exact half size of initial preferred)
-    private void shrinkPrimaryControlButtons() {
-        JButton[] arr = { startButton, pauseButton, skipButton, hideButton };
-        for (JButton b : arr) {
+    // NEW: enhanced control buttons sizing for better visibility and usability
+    private void enhancePrimaryControlButtons() {
+        JButton[] primaryButtons = { startButton, pauseButton, skipButton, hideButton };
+        for (JButton b : primaryButtons) {
             if (b == null) continue;
-            Dimension d = b.getPreferredSize();
-            int w = Math.max(50, d.width / 2); // ensure readable width
-            int h = Math.max(18, d.height / 2);
-            b.setPreferredSize(new Dimension(w, h));
-            b.setMinimumSize(new Dimension(w, h));
-            b.setMaximumSize(new Dimension(w, h));
-            b.setMargin(new Insets(2,4,2,4));
-            b.setFont(b.getFont().deriveFont(Math.max(10f, b.getFont().getSize2D() - 2f)));
+
+            // Make buttons significantly larger and more prominent
+            int width = 85;  // Increased from previous shrunk size
+            int height = 32; // Increased from previous shrunk size
+
+            b.setPreferredSize(new Dimension(width, height));
+            b.setMinimumSize(new Dimension(width, height));
+            b.setMaximumSize(new Dimension(width, height));
+
+            // Better margins for improved appearance
+            b.setMargin(new Insets(6, 8, 6, 8));
+
+            // Larger, more readable font
+            b.setFont(b.getFont().deriveFont(Font.BOLD, 12f));
+
+            // Enhanced visual styling
+            b.setFocusPainted(false);
+            b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createRaisedBevelBorder(),
+                BorderFactory.createEmptyBorder(2, 4, 2, 4)
+            ));
         }
+
         if (controlPanelRef != null) controlPanelRef.revalidate();
     }
 
