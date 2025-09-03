@@ -15,10 +15,9 @@ import java.util.concurrent.TimeUnit;
 
 public class AutoLoginScript extends Script {
 
-<<<<<<< HEAD
     private long loginAttemptTime = -1;
     private boolean waitingToLogin = false;
-=======
+
     private List<WorldRegion> getAllowedRegions(AutoLoginConfig config) {
         List<WorldRegion> allowedRegions = new ArrayList<>();
 
@@ -52,7 +51,6 @@ public class AutoLoginScript extends Script {
 
         return Login.getRandomWorld(config.isMember(), selectedRegion);
     }
->>>>>>> a5f46625a232345a70e17ba7d06ca665a1c7836e
 
     public boolean run(AutoLoginConfig autoLoginConfig) {
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
@@ -61,20 +59,6 @@ public class AutoLoginScript extends Script {
                 if (BreakHandlerScript.isBreakActive() || BreakHandlerScript.isMicroBreakActive()) return;
 
                 if (Microbot.getClient().getGameState() == GameState.LOGIN_SCREEN) {
-<<<<<<< HEAD
-=======
-                    if (autoLoginConfig.useRandomWorld()) {
-                        final int world = getRandomWorldWithRegionFilter(autoLoginConfig);
-                        Microbot.log(Level.INFO, String.format("Auto-logging into random %s world: %d", autoLoginConfig.isMember() ? "member" : "free", world));
-                        new Login(world);
-                    } else {
-                        Microbot.log(Level.INFO, String.format("Auto-logging into world: %d", autoLoginConfig.world()));
-                        new Login(autoLoginConfig.world());
-                    }
-                    sleep(5000);
-                }
->>>>>>> a5f46625a232345a70e17ba7d06ca665a1c7836e
-
                     // Check if Wait Before Login is enabled
                     if (autoLoginConfig.WaitBeforeLogin()) {
                         handleDelayedLogin(autoLoginConfig);
@@ -123,8 +107,11 @@ public class AutoLoginScript extends Script {
 
     private void performLogin(AutoLoginConfig autoLoginConfig) {
         if (autoLoginConfig.useRandomWorld()) {
-            new Login(Login.getRandomWorld(autoLoginConfig.isMember()));
+            final int world = getRandomWorldWithRegionFilter(autoLoginConfig);
+            Microbot.log(Level.INFO, String.format("Auto-logging into random %s world: %d", autoLoginConfig.isMember() ? "member" : "free", world));
+            new Login(world);
         } else {
+            Microbot.log(Level.INFO, String.format("Auto-logging into world: %d", autoLoginConfig.world()));
             new Login(autoLoginConfig.world());
         }
         sleep(5000);

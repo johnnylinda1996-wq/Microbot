@@ -28,31 +28,25 @@ public interface AutoLoginConfig extends Config {
             keyName = "World",
             name = "World",
             description = "World",
-            position = 1,
+            position = 2,
             section = generalSection
     )
     default int world() { return 360; }
 
     @ConfigItem(
             keyName = "RandomWorld",
-<<<<<<< HEAD
-            name = "RandomWorld",
-            description = "use random worlds",
-=======
             name = "Use Random World",
             description = "Use random worlds",
->>>>>>> a5f46625a232345a70e17ba7d06ca665a1c7836e
-            position = 2,
+            position = 3,
             section = generalSection
     )
     default boolean useRandomWorld() { return true; }
 
-<<<<<<< HEAD
     @ConfigItem(
             keyName = "WaitBeforeLogin",
             name = "Wait Before logging in?",
             description = "Waits the given minutes before logging in.",
-            position = 3,
+            position = 4,
             section = generalSection
     )
     default boolean WaitBeforeLogin() { return false; }
@@ -61,12 +55,11 @@ public interface AutoLoginConfig extends Config {
             keyName = "MinutesbeforeLogin",
             name = "Minutes before logging in",
             description = "Enter how much minutes to wait before logging back in.",
-            position = 4,
+            position = 5,
             section = generalSection
     )
     default int MinutesbeforeLogin() { return 20; }
 
-=======
     @ConfigSection(
             name = "Region Filter",
             description = "Filter random world selection by region",
@@ -74,7 +67,6 @@ public interface AutoLoginConfig extends Config {
             closedByDefault = false
     )
     String regionSection = "region";
-
 
     @ConfigItem(
             keyName = "AllowUK",
@@ -111,5 +103,4 @@ public interface AutoLoginConfig extends Config {
             section = regionSection
     )
     default boolean allowAustralia() { return true; }
->>>>>>> a5f46625a232345a70e17ba7d06ca665a1c7836e
 }
