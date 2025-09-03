@@ -2232,8 +2232,8 @@ public class AllInOneBotGUI extends JFrame {
             // Enhanced visual styling
             b.setFocusPainted(false);
             b.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createRaisedBevelBorder(),
-                BorderFactory.createEmptyBorder(2, 4, 2, 4)
+                    BorderFactory.createRaisedBevelBorder(),
+                    BorderFactory.createEmptyBorder(2, 4, 2, 4)
             ));
         }
 
