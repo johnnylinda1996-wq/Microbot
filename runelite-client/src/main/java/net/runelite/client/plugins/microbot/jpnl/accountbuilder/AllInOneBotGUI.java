@@ -101,7 +101,7 @@ public class AllInOneBotGUI extends JFrame {
     // private JTextField filterField;
 
     private final Timer uiTimer;
-    private final Timer queueRefreshTimer; // NEW: dedicated queue refresh timer
+    private final Timer queueListLiteTimer; // NEW: lightweight list-only refresh timer
 
     private JRadioButton levelModeRadio;
     private JRadioButton timeModeRadio;
@@ -182,7 +182,7 @@ public class AllInOneBotGUI extends JFrame {
         refreshQueue();
 
         updateWindowSize();
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE); // Changed to hide when X is clicked
 
         // Set initial position
         setLocationRelativeTo(null);
@@ -199,9 +199,9 @@ public class AllInOneBotGUI extends JFrame {
         uiTimer = new Timer(1000, e -> refreshStatus());
         uiTimer.start();
 
-        // NEW: Dedicated queue refresh timer (every 6 seconds)
-        queueRefreshTimer = new Timer(6000, e -> refreshQueue());
-        queueRefreshTimer.start();
+        // NEW: lightweight list-only refresh every ~7 seconds (only updates JList model)
+        queueListLiteTimer = new Timer(7000, e -> refreshQueueListOnly());
+        queueListLiteTimer.start();
 
         // Add listener to keep last known location updated
         this.addComponentListener(new java.awt.event.ComponentAdapter() {
@@ -916,7 +916,7 @@ public class AllInOneBotGUI extends JFrame {
         editSelectedButton = new JButton("Edit");
         moveUpButton = new JButton("↑");
         moveDownButton = new JButton("↓");
-        skipButton = new JButton("Skip Current");
+        skipButton = new JButton("Skip");
         hideButton = new JButton("Hide");
         saveButton = new JButton("Save");
         loadButton = new JButton("Load");
@@ -924,7 +924,7 @@ public class AllInOneBotGUI extends JFrame {
 
         generateControlIcons();
         applyControlIcons();
-        shrinkControlButtons(); // ensure buttons shrink
+        shrinkPrimaryControlButtons(); // ensure buttons shrink
         applyLanguage(); // initial language application
     }
 
@@ -1393,12 +1393,19 @@ public class AllInOneBotGUI extends JFrame {
     }
 
     private JPanel buildControlPanel() {
-        controlPanelRef = new JPanel(compactMode ? new GridLayout(1,0,3,3) : new GridLayout(0,1,3,3));
+        // Reworked: always horizontal compact layout for the four primary buttons
+        controlPanelRef = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
         controlPanelRef.setBorder(new TitledBorder(translate("Control")));
+        // Shortened labels for compactness
+        startButton.setText(script.isPaused()?"Start":"Start");
+        pauseButton.setText(script.isPaused()?"Resume":"Pause");
+        skipButton.setText("Skip");
+        hideButton.setText("Hide");
         controlPanelRef.add(startButton);
         controlPanelRef.add(pauseButton);
         controlPanelRef.add(skipButton);
-        if (!compactMode) controlPanelRef.add(hideButton);
+        controlPanelRef.add(hideButton);
+        shrinkPrimaryControlButtons();
         return controlPanelRef;
     }
 
@@ -1698,6 +1705,29 @@ public class AllInOneBotGUI extends JFrame {
         } else {
             SwingUtilities.invokeLater(() -> setLocation(keep));
         }
+    }
+
+    // NEW: lightweight refresh only updating the list model (no labels, counts or relocation)
+    private void refreshQueueListOnly() {
+        if (taskModel == null || script == null) return;
+        // Capture selection to restore
+        int selectedIndex = taskList.getSelectedIndex();
+        AioTask cur = script.getCurrentTask();
+        java.util.List<AioTask> raw = script.getQueueSnapshotRaw();
+        // Quick diff: if counts and first/last types match, rebuild silently; else full refresh for safety
+        int existingSize = taskModel.getSize();
+        int expectedSize = raw.size() + (cur != null && !cur.isComplete() ? 1 : 0);
+        if (existingSize != expectedSize) { refreshQueue(); return; }
+        // Rebuild model (fast path)
+        taskModel.clear();
+        if (cur != null && !cur.isComplete()) taskModel.addElement(buildEntryCurrent(cur));
+        int number = 1;
+        for (AioTask t : raw) {
+            taskModel.addElement(buildEntry(t, number));
+            number++;
+        }
+        if (selectedIndex >= 0 && selectedIndex < taskModel.size()) taskList.setSelectedIndex(selectedIndex);
+        taskList.repaint();
     }
 
     private void refreshStatus() {
@@ -2156,11 +2186,11 @@ public class AllInOneBotGUI extends JFrame {
         if (addMinigameButton != null) addMinigameButton.setText("Add Minigame Task");
         if (addTravelButton != null) addTravelButton.setText("Add Travel Task");
         if (removeSelectedButton != null) removeSelectedButton.setText("Remove Selected");
-        if (startButton != null) startButton.setText("Start / Resume");
+        if (startButton != null) startButton.setText("Start"); // shortened
         if (pauseButton != null) pauseButton.setText(script.isPaused()?"Resume":"Pause");
         if (clearButton != null) clearButton.setText("Clear Queue");
         if (refreshButton != null) refreshButton.setText("Refresh");
-        if (skipButton != null) skipButton.setText("Skip Current");
+        if (skipButton != null) skipButton.setText("Skip"); // shortened
         if (hideButton != null) hideButton.setText("Hide");
         if (saveButton != null) saveButton.setText("Save");
         if (loadButton != null) loadButton.setText("Load");
@@ -2179,18 +2209,21 @@ public class AllInOneBotGUI extends JFrame {
         updatePanelBorder(travelPanelRef, "Travel Task");
     }
 
-    // NEW helper to shrink control buttons
-    private void shrinkControlButtons() {
+    // NEW: stronger shrink for primary control buttons (exact half size of initial preferred)
+    private void shrinkPrimaryControlButtons() {
         JButton[] arr = { startButton, pauseButton, skipButton, hideButton };
         for (JButton b : arr) {
             if (b == null) continue;
             Dimension d = b.getPreferredSize();
-            int w = Math.max(60, d.width / 2);
+            int w = Math.max(50, d.width / 2); // ensure readable width
             int h = Math.max(18, d.height / 2);
             b.setPreferredSize(new Dimension(w, h));
+            b.setMinimumSize(new Dimension(w, h));
+            b.setMaximumSize(new Dimension(w, h));
             b.setMargin(new Insets(2,4,2,4));
-            b.setFont(b.getFont().deriveFont(Math.max(10f, b.getFont().getSize2D() - 1f)));
+            b.setFont(b.getFont().deriveFont(Math.max(10f, b.getFont().getSize2D() - 2f)));
         }
+        if (controlPanelRef != null) controlPanelRef.revalidate();
     }
 
     private void updatePanelBorder(JComponent comp, String key) {
@@ -2372,17 +2405,6 @@ public class AllInOneBotGUI extends JFrame {
                     if (components.containsKey("marks")) {
                         JCheckBox checkBox = (JCheckBox) components.get("marks");
                         configManager.setConfiguration(configGroup, "agilityMarks", String.valueOf(checkBox.isSelected()));
-                    }
-                    break;
-
-                case THIEVING:
-                    if (components.containsKey("foodHP")) {
-                        JSpinner spinner = (JSpinner) components.get("foodHP");
-                        configManager.setConfiguration(configGroup, "thievingFoodHP", spinner.getValue().toString());
-                    }
-                    if (components.containsKey("dodgy")) {
-                        JCheckBox checkBox = (JCheckBox) components.get("dodgy");
-                        configManager.setConfiguration(configGroup, "thievingDodgy", String.valueOf(checkBox.isSelected()));
                     }
                     break;
 
