@@ -289,80 +289,38 @@ public class AllInOneBotGUI extends JFrame {
     private void createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
 
-        // Appearance Menu
-        JMenu appearanceMenu = new JMenu("🎨 Appearance");
+        // Themes Menu (formerly Appearance). Clicking shows theme choices directly.
+        JMenu appearanceMenu = new JMenu("Theme's");
+        appearanceMenu.setIcon(generatePaletteIcon());
+        appearanceMenu.setHorizontalTextPosition(SwingConstants.RIGHT);
         appearanceMenuRef = appearanceMenu;
-
-        // Theme submenu
-        JMenu themeMenu = new JMenu("Themes");
+        // Add theme choices directly under the menu
         ButtonGroup themeGroup = new ButtonGroup();
         for (Theme theme : Theme.values()) {
             JRadioButtonMenuItem themeItem = new JRadioButtonMenuItem(theme.displayName);
             themeItem.setSelected(theme == currentTheme);
             themeItem.addActionListener(e -> {
+                // Preserve current size and location when changing theme
+                Dimension prevSize = getSize();
+                Point prevLoc = getLocation();
+
                 currentTheme = theme;
                 applyThemeTweaks();
                 updatePanelVisibility(); // Force a complete UI refresh
+
+                // Re-pack layout, then restore size/location so GUI stays as user set it
+                try {
+                    pack();
+                    if (prevSize != null) setSize(prevSize);
+                    if (prevLoc != null) setLocation(prevLoc);
+                } catch (Exception ignore) {}
+
                 savePreferences();
-                SwingUtilities.invokeLater(() -> repaint()); // Ensure repaint happens
+                SwingUtilities.invokeLater(this::repaint); // Ensure repaint happens
             });
             themeGroup.add(themeItem);
-            themeMenu.add(themeItem);
+            appearanceMenu.add(themeItem);
         }
-        appearanceMenu.add(themeMenu);
-
-        // Layout submenu (compact mode is now the only mode)
-        JMenu layoutMenu = new JMenu("Layout Options");
-
-        layoutMenu.addSeparator();
-
-        // Panel visibility options
-        JCheckBoxMenuItem skillPanelItem = new JCheckBoxMenuItem("Show Skill Panel");
-        skillPanelItem.setSelected(showSkillPanel);
-        skillPanelItem.addActionListener(e -> {
-            showSkillPanel = skillPanelItem.isSelected();
-            updatePanelVisibility();
-            savePreferences();
-        });
-        layoutMenu.add(skillPanelItem);
-
-        JCheckBoxMenuItem questPanelItem = new JCheckBoxMenuItem("Show Quest Panel");
-        questPanelItem.setSelected(showQuestPanel);
-        questPanelItem.addActionListener(e -> {
-            showQuestPanel = questPanelItem.isSelected();
-            updatePanelVisibility();
-            savePreferences();
-        });
-        layoutMenu.add(questPanelItem);
-
-        JCheckBoxMenuItem minigamePanelItem = new JCheckBoxMenuItem("Show Minigame Panel");
-        minigamePanelItem.setSelected(showMinigamePanel);
-        minigamePanelItem.addActionListener(e -> {
-            showMinigamePanel = minigamePanelItem.isSelected();
-            updatePanelVisibility();
-            savePreferences();
-        });
-        layoutMenu.add(minigamePanelItem);
-
-        JCheckBoxMenuItem statusPanelItem = new JCheckBoxMenuItem("Show Status Panel");
-        statusPanelItem.setSelected(showStatusPanel);
-        statusPanelItem.addActionListener(e -> {
-            showStatusPanel = statusPanelItem.isSelected();
-            updatePanelVisibility();
-            savePreferences();
-        });
-        layoutMenu.add(statusPanelItem);
-
-        JCheckBoxMenuItem controlPanelItem = new JCheckBoxMenuItem("Show Control Panel");
-        controlPanelItem.setSelected(showControlPanel);
-        controlPanelItem.addActionListener(e -> {
-            showControlPanel = controlPanelItem.isSelected();
-            updatePanelVisibility();
-            savePreferences();
-        });
-        layoutMenu.add(controlPanelItem);
-
-        appearanceMenu.add(layoutMenu);
 
         // Tools Menu
         JMenu toolsMenu = new JMenu("🔧 Tools");
@@ -1050,7 +1008,7 @@ public class AllInOneBotGUI extends JFrame {
         removeSelectedButton = new JButton("Remove Selected");
         startButton = new JButton("Start / Resume");
         pauseButton = new JButton("Pause");
-        clearButton = new JButton("Clear Queue");
+        clearButton = new JButton("Clear List");
         refreshButton = new JButton("Refresh");
         currentTaskLabel = new JLabel("Current: none");
         statusLabel = new JLabel("Status: ");
@@ -1061,6 +1019,9 @@ public class AllInOneBotGUI extends JFrame {
         elapsedLabel = new JLabel("Elapsed: 0s");
         progressBar = new JProgressBar(0,100);
         progressBar.setStringPainted(true);
+        // Keep original height, make it slightly less wide
+        Dimension pbPref = progressBar.getPreferredSize();
+        progressBar.setPreferredSize(new Dimension(Math.max(80, pbPref.width - 20), pbPref.height));
 
         tasksSummaryLabel = new JLabel("Tasks: 0");
         typeCountsLabel = new JLabel();
@@ -1212,6 +1173,30 @@ public class AllInOneBotGUI extends JFrame {
         return new ImageIcon(img);
     }
 
+    // Small paint palette icon for the "Theme's" menu
+    private Icon generatePaletteIcon() {
+        int sz = 16;
+        BufferedImage img = new BufferedImage(sz, sz, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        // Palette base shape
+        GradientPaint gp = new GradientPaint(0,0,new Color(180,160,120), sz, sz, new Color(140,120,90));
+        g.setPaint(gp);
+        g.fillOval(1,1,sz-2,sz-2);
+        g.setColor(new Color(90,70,40));
+        g.drawOval(1,1,sz-2,sz-2);
+        // Thumb hole
+        g.setColor(new Color(240,240,240,180));
+        g.fillOval(sz/2, sz/2-3, 5, 5);
+        // Paint dabs
+        g.setColor(new Color(200,60,60)); g.fillOval(4,4,3,3);
+        g.setColor(new Color(60,140,220)); g.fillOval(8,3,3,3);
+        g.setColor(new Color(60,170,80)); g.fillOval(12,6,3,3);
+        g.setColor(new Color(220,180,60)); g.fillOval(6,9,3,3);
+        g.dispose();
+        return new ImageIcon(img);
+    }
+
     // NEW: load travel icons (simple generated icons, special color for banks/f2p/p2p)
     private void loadTravelIcons() {
         for (TravelLocation tl : TravelLocation.values()) {
@@ -1281,7 +1266,7 @@ public class AllInOneBotGUI extends JFrame {
         if (hideButton != null) { hideButton.setIcon(hideIcon); hideButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
         if (saveButton != null) { saveButton.setIcon(saveIconSmall); saveButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
         if (loadButton != null) { loadButton.setIcon(loadIconSmall); loadButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
-        if (shuffleButton != null) { shuffleButton.setIcon(shuffleIcon); shuffleButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
+        if (shuffleButton != null) { shuffleButton.setIcon(null); shuffleButton.setHorizontalTextPosition(SwingConstants.RIGHT); }
     }
 
     private void populateTravelCombo() {
@@ -1565,16 +1550,16 @@ public class AllInOneBotGUI extends JFrame {
         if (tasksSummaryLabel != null) countsRow.add(tasksSummaryLabel);
         if (typeCountsLabel != null) countsRow.add(typeCountsLabel);
         queuePanelRef.add(top, BorderLayout.NORTH);
-        taskList.setFixedCellHeight(compactMode ? 18 : 28);
+        taskList.setFixedCellHeight(compactMode ? 16 : 28);
         JScrollPane sp = new JScrollPane(taskList);
         queuePanelRef.add(sp, BorderLayout.CENTER);
         // ...existing code for buttons (unchanged)...
         JPanel buttonArea = new JPanel(new BorderLayout());
         JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 2));
-        // Ensure clear button labeled
+        // Ensure clear button labeled (short label to fit)
         if (clearButton != null) {
-            clearButton.setText("Clear Queue");
-            clearButton.setToolTipText("Clear all tasks from the queue");
+            clearButton.setText("Clear List");
+            clearButton.setToolTipText("Clear all tasks from the list");
         }
         topButtons.add(loadButton);
         topButtons.add(saveButton);
@@ -1584,18 +1569,30 @@ public class AllInOneBotGUI extends JFrame {
         top.add(topButtons);
         // Second row: counts row
         top.add(countsRow);
-        JPanel bottomButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 2));
+        JPanel bottomButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         bottomButtons.add(removeSelectedButton);
         bottomButtons.add(editSelectedButton);
         bottomButtons.add(moveUpButton);
         bottomButtons.add(moveDownButton);
-        bottomButtons.add(shuffleButton);
+        if (shuffleButton != null) {
+            shuffleButton.setText("Shuffle");
+            shuffleButton.setToolTipText("Shuffle the queued tasks");
+            bottomButtons.add(shuffleButton);
+        }
+        // Prevent collapse: give the row a tiny border and minimum height
+        bottomButtons.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
+        Dimension bbPref = bottomButtons.getPreferredSize();
+        bottomButtons.setMinimumSize(new Dimension(100, Math.max(24, bbPref.height)));
         // Ensure critical buttons are visible
         if (clearButton != null) clearButton.setVisible(true);
         if (shuffleButton != null) shuffleButton.setVisible(true);
         buttonArea.add(bottomButtons, BorderLayout.SOUTH);
+        // Reserve space for the bottom row so it's never overlapped by the center scroll pane
+        buttonArea.setPreferredSize(bottomButtons.getPreferredSize());
         queuePanelRef.add(buttonArea, BorderLayout.SOUTH);
         // Do not force a preferred size; let layout and content dictate height so bottom buttons are visible in compact mode
+        queuePanelRef.revalidate();
+        queuePanelRef.repaint();
         return queuePanelRef;
     }
 
@@ -1708,7 +1705,7 @@ public class AllInOneBotGUI extends JFrame {
     // Preserve current position explicitly and avoid centering again
     private void updateWindowSize() {
         if (compactMode) {
-            setMinimumSize(new Dimension(560, 420));
+            setMinimumSize(new Dimension(560, 440));
         } else {
             setMinimumSize(new Dimension(820, 600));
         }
@@ -1999,6 +1996,13 @@ public class AllInOneBotGUI extends JFrame {
         if (pct > 100) pct = 100;
         progressBar.setValue((int) Math.round(pct));
         progressBar.setString(String.format("%.1f%%", pct));
+
+        double p = Math.max(0, Math.min(100, sa.getPercentToTarget())) / 100.0;
+        int r = (int)Math.round(255 * (1.0 - p));
+        int g = (int)Math.round(200 * p + 30 * (1.0 - p)); // keep a bit of warmth at low values
+        r = Math.max(0, Math.min(255, r));
+        g = Math.max(0, Math.min(255, g));
+        progressBar.setForeground(new Color(r, g, 40));
 
         if (compactMode) {
             // In compact mode show condensed remaining + elapsed in tooltip
@@ -2435,7 +2439,7 @@ public class AllInOneBotGUI extends JFrame {
         if (removeSelectedButton != null) removeSelectedButton.setText("Remove Selected");
         if (startButton != null) startButton.setText("Start"); // shortened
         if (pauseButton != null) pauseButton.setText(script.isPaused()?"Resume":"Pause");
-        if (clearButton != null) clearButton.setText("Clear Queue");
+        if (clearButton != null) clearButton.setText("Clear List");
         if (refreshButton != null) refreshButton.setText("Refresh");
         if (skipButton != null) skipButton.setText("Skip"); // shortened
         if (hideButton != null) hideButton.setText("Hide");
