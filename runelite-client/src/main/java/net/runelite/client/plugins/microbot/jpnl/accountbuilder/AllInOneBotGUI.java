@@ -149,6 +149,10 @@ public class AllInOneBotGUI extends JFrame {
     // Keep panel references for language/theme updates
     private JPanel skillPanelRef, questPanelRef, minigamePanelRef, queuePanelRef, controlPanelRef, statusPanelRef;
     private JPanel travelPanelRef;
+    // Inline travel custom options
+    private JPanel travelOptionsPanelInline;
+    private JTextField customTravelNameField;
+    private JSpinner customXSpinner, customYSpinner, customZSpinner;
     // Inline skill options container and component registry
     private JPanel skillOptionsPanelInline;
     private Map<String, JComponent> skillOptionsComponentsInline = new HashMap<>();
@@ -998,7 +1002,7 @@ public class AllInOneBotGUI extends JFrame {
         populateTravelCombo(); // NEW
         addTravelButton = new JButton("Add Travel Task");
         setTravelCustomEnabled(false);
-        travelCombo.addActionListener(e -> setTravelCustomEnabled(isTravelCustomSelected()));
+        travelCombo.addActionListener(e -> rebuildInlineTravelOptions());
 
         taskModel = new DefaultListModel<>();
         taskList = new JList<>(taskModel);
@@ -1521,11 +1525,84 @@ public class AllInOneBotGUI extends JFrame {
         travelPanelRef = new JPanel(new GridBagLayout());
         travelPanelRef.setBorder(new TitledBorder(translate("Travel Task")));
         GridBagConstraints gbc = baseGbc();
+        // Row: location selector
         travelPanelRef.add(new JLabel(translate("Location:")), gbc);
         gbc.gridx = 1; travelPanelRef.add(travelCombo, gbc);
+        // Row: inline custom options placeholder
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2;
+        if (travelOptionsPanelInline == null) travelOptionsPanelInline = new JPanel(new GridBagLayout());
+        travelOptionsPanelInline.setOpaque(false);
+        travelPanelRef.add(travelOptionsPanelInline, gbc);
+        // Row: add button
         gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; travelPanelRef.add(addTravelButton, gbc);
+        // Build inline state according to current selection
+        rebuildInlineTravelOptions();
         return travelPanelRef;
     }
+
+    // --- Inline travel custom options helpers (NEW) ---
+    private void rebuildInlineTravelOptions() {
+        if (travelOptionsPanelInline == null) return;
+        travelOptionsPanelInline.removeAll();
+        if (!isTravelCustomSelected()) {
+            travelOptionsPanelInline.revalidate();
+            travelOptionsPanelInline.repaint();
+            return;
+        }
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(2, 2, 2, 2);
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.gridx = 0; gbc.gridy = 0; gbc.fill = GridBagConstraints.NONE;
+
+        // Name
+        travelOptionsPanelInline.add(new JLabel(translate("Name:")), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        if (customTravelNameField == null) customTravelNameField = new JTextField(12);
+        travelOptionsPanelInline.add(customTravelNameField, gbc);
+
+        // X
+        gbc.gridx = 0; gbc.gridy++; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        travelOptionsPanelInline.add(new JLabel("X:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        if (customXSpinner == null) customXSpinner = new JSpinner(new SpinnerNumberModel(3200, 0, 4000, 1));
+        travelOptionsPanelInline.add(customXSpinner, gbc);
+
+        // Y
+        gbc.gridx = 0; gbc.gridy++; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        travelOptionsPanelInline.add(new JLabel("Y:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        if (customYSpinner == null) customYSpinner = new JSpinner(new SpinnerNumberModel(3200, 0, 4000, 1));
+        travelOptionsPanelInline.add(customYSpinner, gbc);
+
+        // Z / Plane
+        gbc.gridx = 0; gbc.gridy++; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        travelOptionsPanelInline.add(new JLabel("Plane:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        if (customZSpinner == null) customZSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 3, 1));
+        travelOptionsPanelInline.add(customZSpinner, gbc);
+
+        travelOptionsPanelInline.revalidate();
+        travelOptionsPanelInline.repaint();
+    }
+
+    private TravelCustomResult getInlineCustomTravel() {
+        if (!isTravelCustomSelected()) return null;
+        String name = customTravelNameField != null ? customTravelNameField.getText().trim() : "";
+        if (name.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter a name for the custom location.", "Missing name", JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+        int x = customXSpinner != null ? (Integer) customXSpinner.getValue() : 3200;
+        int y = customYSpinner != null ? (Integer) customYSpinner.getValue() : 3200;
+        int z = customZSpinner != null ? (Integer) customZSpinner.getValue() : 0;
+        return new TravelCustomResult(name, x, y, z);
+    }
+
+   /* private static class TravelCustomResult {
+        final String name; final int x; final int y; final int z;
+        TravelCustomResult(String name, int x, int y, int z) { this.name = name; this.x = x; this.y = y; this.z = z; }
+    }*/
 
     // Helpers for custom travel enable (NEW)
     private boolean isTravelCustomSelected() {
@@ -1807,28 +1884,23 @@ public class AllInOneBotGUI extends JFrame {
             refreshQueue();
 
             // Restore location after adding task
-            if (preserveLocation && originalLocation != null) {
-                SwingUtilities.invokeLater(() -> setLocation(originalLocation));
-            }
+            if (preserveLocation && originalLocation != null) SwingUtilities.invokeLater(() -> setLocation(originalLocation));
         });
 
-        addTravelButton.addActionListener(e -> { // NEW travel listener modified: keep combo enabled after custom
+        // Travel add-button: use inline custom fields when 'Custom' is selected
+        addTravelButton.addActionListener(e -> {
             if (preserveLocation) originalLocation = getLocation();
             Object sel = travelCombo.getSelectedItem();
-            boolean wasCustom = false;
-            if (sel instanceof TravelLocation) {
-                script.addTravelTask((TravelLocation) sel);
-            } else if (sel instanceof String && ((String) sel).startsWith("Custom")) {
-                wasCustom = true;
-                TravelCustomResult r = showCustomTravelDialog();
-                if (r != null) script.addTravelTaskCustom(r.name, new WorldPoint(r.x, r.y, r.z));
+            if (sel instanceof net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation) {
+                script.addTravelTask((net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation) sel);
+            } else if (isTravelCustomSelected()) {
+                TravelCustomResult r = getInlineCustomTravel();
+                if (r == null) return; // validation failed
+                script.addTravelTaskCustom(r.name, new WorldPoint(r.x, r.y, r.z));
+                // Reset selection to a normal entry so inline panel hides
+                if (travelCombo.getItemCount() > 1) travelCombo.setSelectedIndex(1);
             }
             refreshQueue();
-            // Re-enable and reset selection if custom was chosen so user can pick normal locations again
-            travelCombo.setEnabled(true);
-            if (wasCustom && travelCombo.getItemCount() > 1) {
-                travelCombo.setSelectedIndex(1); // first actual entry after F2P header
-            }
             if (preserveLocation && originalLocation != null) SwingUtilities.invokeLater(() -> setLocation(originalLocation));
         });
 
