@@ -856,6 +856,15 @@ public interface AllInOneConfig extends Config {
     )
     default boolean pestControlAutoTravel() { return true; }
 
+    @ConfigItem(
+            keyName = "pestControlInventorySetup",
+            name = "Inventory Setup",
+            description = "Name of Inventory Setup to load before starting (optional)",
+            section = pestControlSection,
+            position = 9
+    )
+    default String pestControlInventorySetup() { return ""; }
+
     /* ===================== INTERNAL ====================== */
 
     @ConfigItem(

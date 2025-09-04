@@ -12,6 +12,8 @@ import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioTravelT
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation; // NEW
 import net.runelite.api.coords.WorldPoint; // NEW
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.AllInOneConfig; // ADDED IMPORT
+import net.runelite.client.plugins.microbot.inventorysetups.MInventorySetupsPlugin; // NEW for inventory setups
+import net.runelite.client.plugins.microbot.inventorysetups.InventorySetup; // NEW for inventory setups
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -1529,12 +1531,33 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2;
         if (minigameOptionsPanelInline == null) minigameOptionsPanelInline = new JPanel(new GridBagLayout());
         minigameOptionsPanelInline.setOpaque(false);
-        minigamePanelRef.add(minigameOptionsPanelInline, gbc);
+        // Ensure panel isn't attached elsewhere before wrapping in a scroll pane
+        if (minigameOptionsPanelInline.getParent() != null) {
+            java.awt.Container p = minigameOptionsPanelInline.getParent();
+            if (p instanceof javax.swing.JViewport && p.getParent() instanceof javax.swing.JScrollPane) {
+                ((javax.swing.JViewport) p).remove(minigameOptionsPanelInline);
+            } else {
+                p.remove(minigameOptionsPanelInline);
+            }
+        }
+        javax.swing.JScrollPane minigameScroll1 = new javax.swing.JScrollPane(minigameOptionsPanelInline);
+        minigameScroll1.setBorder(null);
+        minigameScroll1.setOpaque(false);
+        minigameScroll1.getViewport().setOpaque(false);
+        minigameScroll1.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        minigameScroll1.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        // Make the scroll area expand to fill remaining vertical space
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        minigamePanelRef.add(minigameScroll1, gbc);
 
         // Build options for current minigame selection
         rebuildInlineMinigameOptions();
 
-        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; minigamePanelRef.add(addMinigameButton, gbc);
+        // Bottom button stays fixed; reset weight and fill
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; gbc.weighty = 0; gbc.fill = GridBagConstraints.NONE;
+        minigamePanelRef.add(addMinigameButton, gbc);
         return minigamePanelRef;
     }
 
@@ -2315,7 +2338,22 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; gbc.fill = GridBagConstraints.BOTH;
         if (minigameOptionsPanelInline == null) minigameOptionsPanelInline = new JPanel(new GridBagLayout());
         minigameOptionsPanelInline.setOpaque(false);
-        configPanel.add(minigameOptionsPanelInline, gbc);
+        // Ensure panel isn't attached elsewhere before wrapping in a scroll pane
+        if (minigameOptionsPanelInline.getParent() != null) {
+            java.awt.Container p2 = minigameOptionsPanelInline.getParent();
+            if (p2 instanceof javax.swing.JViewport && p2.getParent() instanceof javax.swing.JScrollPane) {
+                ((javax.swing.JViewport) p2).remove(minigameOptionsPanelInline);
+            } else {
+                p2.remove(minigameOptionsPanelInline);
+            }
+        }
+        javax.swing.JScrollPane minigameScroll2 = new javax.swing.JScrollPane(minigameOptionsPanelInline);
+        minigameScroll2.setBorder(null);
+        minigameScroll2.setOpaque(false);
+        minigameScroll2.getViewport().setOpaque(false);
+        minigameScroll2.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        minigameScroll2.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        configPanel.add(minigameScroll2, gbc);
         rebuildInlineMinigameOptions();
         // Add the configuration panel to the main dialog content
         mainPanel.add(configPanel, BorderLayout.CENTER);
@@ -2935,7 +2973,22 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; gbc.fill = GridBagConstraints.BOTH;
         if (minigameOptionsPanelInline == null) minigameOptionsPanelInline = new JPanel(new GridBagLayout());
         minigameOptionsPanelInline.setOpaque(false);
-        panel.add(minigameOptionsPanelInline, gbc);
+        // Ensure panel isn't attached elsewhere before wrapping in a scroll pane
+        if (minigameOptionsPanelInline.getParent() != null) {
+            java.awt.Container p3 = minigameOptionsPanelInline.getParent();
+            if (p3 instanceof javax.swing.JViewport && p3.getParent() instanceof javax.swing.JScrollPane) {
+                ((javax.swing.JViewport) p3).remove(minigameOptionsPanelInline);
+            } else {
+                p3.remove(minigameOptionsPanelInline);
+            }
+        }
+        javax.swing.JScrollPane minigameScroll3 = new javax.swing.JScrollPane(minigameOptionsPanelInline);
+        minigameScroll3.setBorder(null);
+        minigameScroll3.setOpaque(false);
+        minigameScroll3.getViewport().setOpaque(false);
+        minigameScroll3.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        minigameScroll3.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        panel.add(minigameScroll3, gbc);
         rebuildInlineMinigameOptions();
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -3034,6 +3087,8 @@ public class AllInOneBotGUI extends JFrame {
     private void rebuildInlineMinigameOptions() {
         if (minigameOptionsPanelInline == null) return;
         minigameOptionsPanelInline.removeAll();
+        // Add a small right padding so long labels don't run under the scrollbar
+        minigameOptionsPanelInline.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 10));
 
         GridBagConstraints gbc = baseGbc();
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
@@ -3045,11 +3100,120 @@ public class AllInOneBotGUI extends JFrame {
             return;
         }
 
-        // Placeholder/demo options for specific minigames
+        // Build inline options per minigame
         switch (selected) {
             case PEST_CONTROL: {
+                // Build full Pest Control options using ConfigManager and AllInOneConfig keys
+                // Config group from AllInOneConfig annotation
+                final String pcGroup = "allInOneAio";
+                ConfigManager cm = script.getConfigManager();
+
+                // Helper to read String config
+                java.util.function.BiFunction<String, String, String> getStr = (group, key) -> {
+                    try { return cm.getConfiguration(group, key); } catch (Exception e) { return null; }
+                };
+                // Helper to set String config
+                java.util.function.BiConsumer<String, String> setStr = (key, val) -> {
+                    try { cm.setConfiguration(pcGroup, key, val); } catch (Exception ignored) {}
+                };
+
+                // Row helper
+                java.util.function.BiConsumer<String, JComponent> addRow = (label, comp) -> {
+                    gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE; minigameOptionsPanelInline.add(new JLabel(label), gbc);
+                    gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; minigameOptionsPanelInline.add(comp, gbc); gbc.gridy++;
+                };
+
+                // Auto Travel toggle
+                boolean autoTravel = Boolean.parseBoolean(getStr.apply(pcGroup, "pestControlAutoTravel"));
+                JCheckBox autoTravelCb = new JCheckBox("Auto travel to Pest Control");
+                autoTravelCb.setSelected(autoTravel);
+                autoTravelCb.addActionListener(ev -> setStr.accept("pestControlAutoTravel", Boolean.toString(autoTravelCb.isSelected())));
+                addRow.accept("Auto Travel:", autoTravelCb);
+
+                // NPC Priority 1..3 (enum)
+                javax.swing.JComboBox<AllInOneConfig.PestControlNpc> prio1 = new javax.swing.JComboBox<>(AllInOneConfig.PestControlNpc.values());
+                javax.swing.JComboBox<AllInOneConfig.PestControlNpc> prio2 = new javax.swing.JComboBox<>(AllInOneConfig.PestControlNpc.values());
+                javax.swing.JComboBox<AllInOneConfig.PestControlNpc> prio3 = new javax.swing.JComboBox<>(AllInOneConfig.PestControlNpc.values());
+
+                String p1 = getStr.apply(pcGroup, "pestControlPriority1");
+                String p2 = getStr.apply(pcGroup, "pestControlPriority2");
+                String p3 = getStr.apply(pcGroup, "pestControlPriority3");
+                try { if (p1 != null) prio1.setSelectedItem(AllInOneConfig.PestControlNpc.valueOf(p1)); } catch (Exception ignored) {}
+                try { if (p2 != null) prio2.setSelectedItem(AllInOneConfig.PestControlNpc.valueOf(p2)); } catch (Exception ignored) {}
+                try { if (p3 != null) prio3.setSelectedItem(AllInOneConfig.PestControlNpc.valueOf(p3)); } catch (Exception ignored) {}
+
+                prio1.addActionListener(ev -> { Object v = prio1.getSelectedItem(); if (v != null) setStr.accept("pestControlPriority1", ((Enum<?>) v).name()); });
+                prio2.addActionListener(ev -> { Object v = prio2.getSelectedItem(); if (v != null) setStr.accept("pestControlPriority2", ((Enum<?>) v).name()); });
+                prio3.addActionListener(ev -> { Object v = prio3.getSelectedItem(); if (v != null) setStr.accept("pestControlPriority3", ((Enum<?>) v).name()); });
+
+                addRow.accept("NPC Priority 1:", prio1);
+                addRow.accept("NPC Priority 2:", prio2);
+                addRow.accept("NPC Priority 3:", prio3);
+
+                // Alch while waiting (boolean) and alch item (string)
+                boolean alch = Boolean.parseBoolean(getStr.apply(pcGroup, "pestControlAlchInBoat"));
                 JCheckBox alchWhileWaiting = new JCheckBox("Alch while waiting?");
-                minigameOptionsPanelInline.add(alchWhileWaiting, gbc); gbc.gridy++;
+                alchWhileWaiting.setSelected(alch);
+                alchWhileWaiting.addActionListener(ev -> setStr.accept("pestControlAlchInBoat", Boolean.toString(alchWhileWaiting.isSelected())));
+                addRow.accept("Alching:", alchWhileWaiting);
+
+                String alchItem = getStr.apply(pcGroup, "pestControlAlchItem");
+                JTextField alchItemField = new JTextField(alchItem == null ? "" : alchItem, 12);
+                alchItemField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                    private void upd() { setStr.accept("pestControlAlchItem", alchItemField.getText()); }
+                    public void insertUpdate(javax.swing.event.DocumentEvent e) { upd(); }
+                    public void removeUpdate(javax.swing.event.DocumentEvent e) { upd(); }
+                    public void changedUpdate(javax.swing.event.DocumentEvent e) { upd(); }
+                });
+                addRow.accept("Item to alch:", alchItemField);
+
+                // Quick prayer (boolean)
+                boolean qp = Boolean.parseBoolean(getStr.apply(pcGroup, "pestControlQuickPrayer"));
+                JCheckBox quickPrayer = new JCheckBox("Enable QuickPrayer");
+                quickPrayer.setSelected(qp);
+                quickPrayer.addActionListener(ev -> setStr.accept("pestControlQuickPrayer", Boolean.toString(quickPrayer.isSelected())));
+                addRow.accept("QuickPrayer:", quickPrayer);
+
+                // Special attack percentage (int)
+                int sa = 100;
+                try { String s = getStr.apply(pcGroup, "pestControlSpecAttack"); if (s != null) sa = Integer.parseInt(s); } catch (Exception ignored) {}
+                JSpinner specPerc = new JSpinner(new SpinnerNumberModel(sa, 0, 100, 5));
+                specPerc.addChangeListener(ev -> setStr.accept("pestControlSpecAttack", ((Integer) specPerc.getValue()).toString()));
+                addRow.accept("Spec at %:", specPerc);
+
+                // World (int)
+                int world = 344;
+                try { String s = getStr.apply(pcGroup, "pestControlWorld"); if (s != null) world = Integer.parseInt(s); } catch (Exception ignored) {}
+                JSpinner worldSpin = new JSpinner(new SpinnerNumberModel(world, 301, 500, 1));
+                worldSpin.addChangeListener(ev -> setStr.accept("pestControlWorld", ((Integer) worldSpin.getValue()).toString()));
+                addRow.accept("World:", worldSpin);
+
+                // Inventory setup: show hint label (selection integration can be added later)
+                // Inventory Setup selection (reads available setups from MInventorySetupsPlugin)
+                String invKey = "pestControlInventorySetup";
+                String currentSetupName = getStr.apply(pcGroup, invKey);
+                java.util.List<InventorySetup> setups = MInventorySetupsPlugin.getInventorySetups();
+                javax.swing.JComboBox<String> setupCombo = new javax.swing.JComboBox<>();
+                setupCombo.addItem("None");
+                if (setups != null) {
+                    for (InventorySetup s : setups) {
+                        if (s != null && s.getName() != null && !s.getName().isBlank()) {
+                            setupCombo.addItem(s.getName());
+                        }
+                    }
+                }
+                if (currentSetupName == null || currentSetupName.isBlank()) {
+                    setupCombo.setSelectedItem("None");
+                } else {
+                    setupCombo.setSelectedItem(currentSetupName);
+                }
+                setupCombo.addActionListener(ev -> {
+                    Object sel = setupCombo.getSelectedItem();
+                    String val = (sel == null || "None".equals(sel.toString())) ? "" : sel.toString();
+                    setStr.accept(invKey, val);
+                });
+                addRow.accept("Inventory Setup:", setupCombo);
+
                 break;
             }
             default: {
@@ -3058,9 +3222,28 @@ public class AllInOneBotGUI extends JFrame {
             }
         }
 
+        // Slightly scale down fonts in this panel to prevent clipping under the scrollbar
+        applyFontScale(minigameOptionsPanelInline, 0.95f);
+
         minigameOptionsPanelInline.revalidate();
         minigameOptionsPanelInline.repaint();
     }
     // ================== END RE-ADDED MISSING METHODS ==================
-}
 
+    // --- UI helper: recursively scale fonts of a component tree ---
+    private void applyFontScale(java.awt.Component comp, float scale) {
+        try {
+            if (comp == null) return;
+            java.awt.Font f = comp.getFont();
+            if (f != null) {
+                float newSize = Math.max(9f, f.getSize2D() * scale);
+                comp.setFont(f.deriveFont(newSize));
+            }
+            if (comp instanceof java.awt.Container) {
+                for (java.awt.Component c : ((java.awt.Container) comp).getComponents()) {
+                    applyFontScale(c, scale);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+}

@@ -6,6 +6,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.microbot.Microbot;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.AllInOneConfig;
 import net.runelite.client.plugins.microbot.util.Rs2InventorySetup;
 import net.runelite.client.plugins.microbot.util.Global;
 import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
@@ -34,7 +35,7 @@ public class PestControlScript {
     private boolean initialise = true;
     private boolean walkToCenter = false;
     private boolean hasAutoTraveled = false;
-    private final PestControlConfig config;
+    private final AllInOneConfig config;
 
     // Pest Control island location (void knight outpost bank)
     private static final WorldPoint PEST_CONTROL_LOCATION = new WorldPoint(2667, 2653, 0);
@@ -60,7 +61,7 @@ public class PestControlScript {
 
     final int distanceToPortal = 8;
 
-    public PestControlScript(PestControlConfig config) {
+    public PestControlScript(AllInOneConfig config) {
         this.config = config;
     }
 
@@ -88,37 +89,41 @@ public class PestControlScript {
 
             if (initialise && !isInPestControl && !isInBoat) {
                 Microbot.log("Initialising Pest Control");
-                if (Rs2Player.getWorld() != config.world()) {
-                    Microbot.hopToWorld(config.world());
-                    Global.sleepUntil(() -> Rs2Player.getWorld() == config.world(), 7000);
+                if (Rs2Player.getWorld() != config.pestControlWorld()) {
+                    Microbot.hopToWorld(config.pestControlWorld());
+                    Global.sleepUntil(() -> Rs2Player.getWorld() == config.pestControlWorld(), 7000);
                 }
 
-                if (Rs2Player.getWorldLocation().getRegionID() == 10537 && Rs2Player.getWorld() == config.world()) {
+                if (Rs2Player.getWorldLocation().getRegionID() == 10537 && Rs2Player.getWorld() == config.pestControlWorld()) {
                     if (!Rs2Bank.isOpen()) {
                         Microbot.log("Opening bank");
                         Rs2Bank.openBank();
                         Global.sleepUntil(Rs2Bank::isOpen, 3000);
                     }
 
-                    if (config.inventorySetup() != null) {
-                        var inventorySetup = new Rs2InventorySetup(config.inventorySetup(), null);
-                        Microbot.log("Starting Inv Setup");
-
-                        if (!inventorySetup.doesInventoryMatch() || !inventorySetup.doesEquipmentMatch()) {
-                            if (!inventorySetup.loadEquipment() || !inventorySetup.loadInventory()) {
-                                Microbot.log("Failed to load inventory setup");
-                                return true; // Complete with failure
-                            }
-                        } else {
-                            Microbot.log("Inv Setup Finished");
-                            Rs2Bank.closeBank();
-                            Global.sleepUntil(() -> !Rs2Bank.isOpen(), 2000);
-                            initialise = false;
+                    // Inventory setup optional: load if configured in AllInOneConfig
+                    String setupName = config.pestControlInventorySetup();
+                    if (setupName != null && !setupName.isBlank()) {
+                        Microbot.log("Loading Inventory Setup: " + setupName);
+                        Rs2InventorySetup inventorySetup = new Rs2InventorySetup(setupName, null);
+                        // If setup not found, constructor will notify and pause scripts; proceed to close bank gracefully
+                        boolean ok = true;
+                        if (!inventorySetup.doesEquipmentMatch()) {
+                            ok = inventorySetup.loadEquipment();
                         }
-                    } else {
-                        Rs2Bank.closeBank();
-                        initialise = false;
+                        if (ok && !inventorySetup.doesInventoryMatch()) {
+                            ok = inventorySetup.loadInventory();
+                        }
+                        if (!ok) {
+                            Microbot.log("Failed to load inventory setup: " + setupName);
+                            // Keep bank open so user can correct; end step
+                            return true;
+                        }
+                        Microbot.log("Inventory Setup loaded");
                     }
+                    Rs2Bank.closeBank();
+                    Global.sleepUntil(() -> !Rs2Bank.isOpen(), 2000);
+                    initialise = false;
                 } else {
                     Microbot.log("Traveling to Pest Island");
                     Rs2Walker.walkTo(PEST_CONTROL_LOCATION);
@@ -128,7 +133,7 @@ public class PestControlScript {
 
             if (isInPestControl) {
                 initialise = false;
-                if (!isQuickPrayerEnabled() && Microbot.getClient().getBoostedSkillLevel(Skill.PRAYER) != 0 && config.quickPrayer()) {
+                if (!isQuickPrayerEnabled() && Microbot.getClient().getBoostedSkillLevel(Skill.PRAYER) != 0 && config.pestControlQuickPrayer()) {
                     // Use direct widget ID instead of deprecated ComponentID
                     final Widget prayerOrb = Rs2Widget.getWidget(10485775); // MINIMAP_QUICK_PRAYER_ORB
                     if (prayerOrb != null) {
@@ -147,7 +152,7 @@ public class PestControlScript {
                     }
                 }
 
-                Rs2Combat.setSpecState(true, config.specialAttackPercentage() * 10);
+                Rs2Combat.setSpecState(true, config.pestControlSpecAttack() * 10);
                 Widget activity = Rs2Widget.getWidget(26738700);
                 if (activity != null && activity.getChild(0) != null &&
                     activity.getChild(0) != null && activity.getChild(0).getWidth() <= 20 && !Rs2Combat.inCombat()) {
@@ -166,21 +171,21 @@ public class PestControlScript {
                 if (Microbot.getClient().getLocalPlayer().isInteracting())
                     return false;
 
-                if (handleAttack(PestControlNpc.BRAWLER, 1)
-                        || handleAttack(PestControlNpc.PORTAL, 1)
-                        || handleAttack(PestControlNpc.SPINNER, 1)) {
+                if (handleAttack(AllInOneConfig.PestControlNpc.BRAWLER, 1)
+                        || handleAttack(AllInOneConfig.PestControlNpc.PORTAL, 1)
+                        || handleAttack(AllInOneConfig.PestControlNpc.SPINNER, 1)) {
                     return false;
                 }
 
-                if (handleAttack(PestControlNpc.BRAWLER, 2)
-                        || handleAttack(PestControlNpc.PORTAL, 2)
-                        || handleAttack(PestControlNpc.SPINNER, 2)) {
+                if (handleAttack(AllInOneConfig.PestControlNpc.BRAWLER, 2)
+                        || handleAttack(AllInOneConfig.PestControlNpc.PORTAL, 2)
+                        || handleAttack(AllInOneConfig.PestControlNpc.SPINNER, 2)) {
                     return false;
                 }
 
-                if (handleAttack(PestControlNpc.BRAWLER, 3)
-                        || handleAttack(PestControlNpc.PORTAL, 3)
-                        || handleAttack(PestControlNpc.SPINNER, 3)) {
+                if (handleAttack(AllInOneConfig.PestControlNpc.BRAWLER, 3)
+                        || handleAttack(AllInOneConfig.PestControlNpc.PORTAL, 3)
+                        || handleAttack(AllInOneConfig.PestControlNpc.SPINNER, 3)) {
                     return false;
                 }
 
@@ -212,8 +217,8 @@ public class PestControlScript {
                     // Use direct widget ID instead of deprecated WidgetInfo
                     Global.sleepUntil(() -> Microbot.getClient().getWidget(408, 2) != null, 3000); // PEST_CONTROL_BOAT_INFO
                 } else {
-                    if (config.alchInBoat() && !config.alchItem().equalsIgnoreCase("")) {
-                        Rs2Magic.alch(config.alchItem());
+                    if (config.pestControlAlchInBoat() && !config.pestControlAlchItem().equalsIgnoreCase("")) {
+                        Rs2Magic.alch(config.pestControlAlchItem());
                     }
                 }
                 return false;
@@ -225,9 +230,11 @@ public class PestControlScript {
     }
 
     private boolean shouldAutoTravel() {
-        // For now, return true to always auto-travel when task starts
-        // This will be enhanced to check the AllInOneConfig setting via the adapter
-        return true;
+        try {
+            return config.pestControlAutoTravel();
+        } catch (Exception ignored) {
+            return true; // fallback
+        }
     }
 
     private boolean performAutoTravel() {
@@ -281,29 +288,29 @@ public class PestControlScript {
         Global.sleepUntil(() -> Microbot.getClient().getWidget(408, 2) == null, 3000); // PEST_CONTROL_BOAT_INFO
     }
 
-    private boolean handleAttack(PestControlNpc npcType, int priority) {
+    private boolean handleAttack(AllInOneConfig.PestControlNpc npcType, int priority) {
         if (priority == 1) {
-            if (config.Priority1() == npcType) {
+            if (config.pestControlPriority1() == npcType) {
                 return performAttack(npcType);
             }
         } else if (priority == 2) {
-            if (config.Priority2() == npcType) {
+            if (config.pestControlPriority2() == npcType) {
                 return performAttack(npcType);
             }
         } else {
-            if (config.Priority3() == npcType) {
+            if (config.pestControlPriority3() == npcType) {
                 return performAttack(npcType);
             }
         }
         return false;
     }
 
-    private boolean performAttack(PestControlNpc npcType) {
-        if (npcType == PestControlNpc.BRAWLER) {
+    private boolean performAttack(AllInOneConfig.PestControlNpc npcType) {
+        if (npcType == AllInOneConfig.PestControlNpc.BRAWLER) {
             return attackBrawler();
-        } else if (npcType == PestControlNpc.PORTAL) {
+        } else if (npcType == AllInOneConfig.PestControlNpc.PORTAL) {
             return attackPortals();
-        } else if (npcType == PestControlNpc.SPINNER) {
+        } else if (npcType == AllInOneConfig.PestControlNpc.SPINNER) {
             return attackSpinner();
         }
         return false;

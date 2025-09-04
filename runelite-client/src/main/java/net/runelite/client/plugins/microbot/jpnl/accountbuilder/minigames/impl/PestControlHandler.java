@@ -63,7 +63,8 @@ public class PestControlHandler implements MinigameHandler {
                 return;
             }
 
-            script = new PestControlScript(new ConfigAdapter(config));
+            // Pass AllInOneConfig directly to the script
+            script = new PestControlScript(config);
             initialized = true;
             Microbot.log("Pest Control Handler initialized");
         } catch (Exception e) {
@@ -88,75 +89,5 @@ public class PestControlHandler implements MinigameHandler {
         initialized = false;
     }
 
-    // Adapter class to convert AllInOneConfig to PestControlConfig interface
-    private static class ConfigAdapter implements net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlConfig {
-        private final AllInOneConfig config;
-
-        public ConfigAdapter(AllInOneConfig config) {
-            this.config = config;
-        }
-
-        @Override
-        public String GUIDE() {
-            return "Start near a boat of your combat level";
-        }
-
-        @Override
-        public net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc Priority1() {
-            return convertNpc(config.pestControlPriority1());
-        }
-
-        @Override
-        public net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc Priority2() {
-            return convertNpc(config.pestControlPriority2());
-        }
-
-        @Override
-        public net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc Priority3() {
-            return convertNpc(config.pestControlPriority3());
-        }
-
-        @Override
-        public boolean alchInBoat() {
-            return config.pestControlAlchInBoat();
-        }
-
-        @Override
-        public String alchItem() {
-            return config.pestControlAlchItem();
-        }
-
-        @Override
-        public boolean quickPrayer() {
-            return config.pestControlQuickPrayer();
-        }
-
-        @Override
-        public int specialAttackPercentage() {
-            return config.pestControlSpecAttack();
-        }
-
-        @Override
-        public net.runelite.client.plugins.microbot.inventorysetups.InventorySetup inventorySetup() {
-            return null; // Not implemented in AllInOne system yet
-        }
-
-        @Override
-        public int world() {
-            return config.pestControlWorld();
-        }
-
-        private net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc convertNpc(AllInOneConfig.PestControlNpc npc) {
-            switch (npc) {
-                case PORTAL:
-                    return net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc.PORTAL;
-                case BRAWLER:
-                    return net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc.BRAWLER;
-                case SPINNER:
-                    return net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc.SPINNER;
-                default:
-                    return net.runelite.client.plugins.microbot.jpnl.accountbuilder.minigames.impl.pestcontrol.PestControlNpc.PORTAL;
-            }
-        }
-    }
+    // Adapter removed; script now uses AllInOneConfig directly
 }
