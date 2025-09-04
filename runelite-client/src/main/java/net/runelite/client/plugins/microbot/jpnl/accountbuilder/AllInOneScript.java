@@ -459,7 +459,12 @@ public class AllInOneScript extends Script {
         // Lightweight placeholder handlers – extend later with real logic
         register(new BarbarianAssaultHandler());
         register(new WintertodtHandler());
-        register(new PestControlHandler());
+
+        // Initialize PestControlHandler with config
+        PestControlHandler pestControlHandler = new PestControlHandler();
+        pestControlHandler.setConfig(config);
+        register(pestControlHandler);
+
         register(new NightmareZoneHandler());
         register(new SoulWarsHandler());
         register(new GuardiansOfTheRiftHandler());
@@ -787,17 +792,40 @@ public class AllInOneScript extends Script {
         return configGroup;
     }
 
-    private net.runelite.api.Skill mapToApi(SkillType st) {
-        if (st == null) return Skill.ATTACK; // default fallback
-        switch (st) {
+    public Map<MinigameType, MinigameHandler> getMinigameHandlers() {
+        return minigameHandlers;
+    }
+
+    /**
+     * Maps the custom SkillType enum to RuneLite's Skill enum
+     */
+    private static Skill mapToApi(SkillType skillType) {
+        switch (skillType) {
+            case ATTACK: return Skill.ATTACK;
+            case STRENGTH: return Skill.STRENGTH;
+            case DEFENCE: return Skill.DEFENCE;
+            case RANGED: return Skill.RANGED;
+            case PRAYER: return Skill.PRAYER;
+            case MAGIC: return Skill.MAGIC;
             case RUNECRAFTING: return Skill.RUNECRAFT;
+            case CONSTRUCTION: return Skill.CONSTRUCTION;
             case HITPOINTS: return Skill.HITPOINTS;
+            case AGILITY: return Skill.AGILITY;
+            case HERBLORE: return Skill.HERBLORE;
+            case THIEVING: return Skill.THIEVING;
+            case CRAFTING: return Skill.CRAFTING;
+            case FLETCHING: return Skill.FLETCHING;
+            case SLAYER: return Skill.SLAYER;
+            case HUNTER: return Skill.HUNTER;
+            case MINING: return Skill.MINING;
+            case SMITHING: return Skill.SMITHING;
+            case FISHING: return Skill.FISHING;
+            case COOKING: return Skill.COOKING;
+            case FIREMAKING: return Skill.FIREMAKING;
+            case WOODCUTTING: return Skill.WOODCUTTING;
+            case FARMING: return Skill.FARMING;
             default:
-                try {
-                    return Skill.valueOf(st.name());
-                } catch (IllegalArgumentException ex) {
-                    return Skill.ATTACK;
-                }
+                throw new IllegalArgumentException("Unknown skill type: " + skillType);
         }
     }
 }

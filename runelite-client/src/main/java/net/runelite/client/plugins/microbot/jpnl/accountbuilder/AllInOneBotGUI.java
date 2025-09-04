@@ -157,6 +157,10 @@ public class AllInOneBotGUI extends JFrame {
     private JPanel skillOptionsPanelInline;
     private Map<String, JComponent> skillOptionsComponentsInline = new HashMap<>();
 
+    // Inline minigame options container and component registry
+    private JPanel minigameOptionsPanelInline;
+    private Map<String, JComponent> minigameOptionsComponentsInline = new HashMap<>();
+
     // Menu item references for language switching
     private JMenu appearanceMenuRef; // to add language submenu here instead of Help
     private JMenu languageMenuRef;
@@ -995,6 +999,10 @@ public class AllInOneBotGUI extends JFrame {
                 .filter(mt -> !mt.name().equals("BARBARIAN_ASSAULT")) // NEW exclude Barbarian Assault
                 .toArray(MinigameType[]::new));
         minigameCombo.setRenderer(new MinigameIconRenderer());
+        // Rebuild inline options when minigame selection changes
+        minigameCombo.addActionListener(e -> rebuildInlineMinigameOptions());
+        // Initial inline options build
+        rebuildInlineMinigameOptions();
         addMinigameButton = new JButton("Add Minigame Task");
 
         // --- Travel components (NEW) ---
@@ -1516,6 +1524,16 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx = 1; minigamePanelRef.add(minigameCombo, gbc);
         gbc.gridx = 0; gbc.gridy++; minigamePanelRef.add(new JLabel(translate("Duration (min):")), gbc);
         gbc.gridx = 1; minigamePanelRef.add(minigameDurationSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 1440, 1)), gbc);
+
+        // Container for minigame-specific options (Pest Control etc.)
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2;
+        if (minigameOptionsPanelInline == null) minigameOptionsPanelInline = new JPanel(new GridBagLayout());
+        minigameOptionsPanelInline.setOpaque(false);
+        minigamePanelRef.add(minigameOptionsPanelInline, gbc);
+
+        // Build options for current minigame selection
+        rebuildInlineMinigameOptions();
+
         gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2; minigamePanelRef.add(addMinigameButton, gbc);
         return minigamePanelRef;
     }
@@ -2292,12 +2310,17 @@ public class AllInOneBotGUI extends JFrame {
 
         // Additional skill-specific options
         Map<String, JComponent> additionalComponents = new HashMap<>();
-        addSkillSpecificOptions(skillType, configPanel, additionalComponents, gbc);
-
+        gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; addSkillSpecificOptions(skillType, configPanel, additionalComponents, gbc);
+        // --- Inline minigame options (NEW) ---
+        gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; gbc.fill = GridBagConstraints.BOTH;
+        if (minigameOptionsPanelInline == null) minigameOptionsPanelInline = new JPanel(new GridBagLayout());
+        minigameOptionsPanelInline.setOpaque(false);
+        configPanel.add(minigameOptionsPanelInline, gbc);
+        rebuildInlineMinigameOptions();
+        // Add the configuration panel to the main dialog content
         mainPanel.add(configPanel, BorderLayout.CENTER);
 
-        // Buttons
-        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JPanel buttons = new JPanel(new FlowLayout());
         JButton okButton = new JButton("Save Changes");
         JButton cancelButton = new JButton("Cancel");
 
@@ -2331,9 +2354,9 @@ public class AllInOneBotGUI extends JFrame {
             dialog.dispose();
         });
 
-        buttonPanel.add(okButton);
-        buttonPanel.add(cancelButton);
-        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+        buttons.add(okButton);
+        buttons.add(cancelButton);
+        mainPanel.add(buttons, BorderLayout.SOUTH);
 
         dialog.add(mainPanel);
         dialog.pack();
@@ -2908,6 +2931,13 @@ public class AllInOneBotGUI extends JFrame {
         gbc.gridx=1; panel.add(methodCombo, gbc);
         Map<String, JComponent> extra = new HashMap<>();
         gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; addSkillSpecificOptions(skillType, panel, extra, gbc);
+        // --- Inline minigame options (NEW) ---
+        gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; gbc.fill = GridBagConstraints.BOTH;
+        if (minigameOptionsPanelInline == null) minigameOptionsPanelInline = new JPanel(new GridBagLayout());
+        minigameOptionsPanelInline.setOpaque(false);
+        panel.add(minigameOptionsPanelInline, gbc);
+        rebuildInlineMinigameOptions();
+
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton ok = new JButton("OK"); JButton cancel = new JButton("Cancel");
         final boolean[] result = {false};
@@ -2998,5 +3028,39 @@ public class AllInOneBotGUI extends JFrame {
             default: // no options
         }
     }
+
+    // --- ADDED INLINE MINIGAME OPTIONS (NEW) ---
+    // Rebuilds the inline minigame-specific options panel based on the selected minigame
+    private void rebuildInlineMinigameOptions() {
+        if (minigameOptionsPanelInline == null) return;
+        minigameOptionsPanelInline.removeAll();
+
+        GridBagConstraints gbc = baseGbc();
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
+
+        MinigameType selected = (MinigameType) minigameCombo.getSelectedItem();
+        if (selected == null) {
+            minigameOptionsPanelInline.revalidate();
+            minigameOptionsPanelInline.repaint();
+            return;
+        }
+
+        // Placeholder/demo options for specific minigames
+        switch (selected) {
+            case PEST_CONTROL: {
+                JCheckBox alchWhileWaiting = new JCheckBox("Alch while waiting?");
+                minigameOptionsPanelInline.add(alchWhileWaiting, gbc); gbc.gridy++;
+                break;
+            }
+            default: {
+                // No specific options for this minigame yet
+                break;
+            }
+        }
+
+        minigameOptionsPanelInline.revalidate();
+        minigameOptionsPanelInline.repaint();
+    }
     // ================== END RE-ADDED MISSING METHODS ==================
 }
+

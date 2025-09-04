@@ -763,6 +763,99 @@ public interface AllInOneConfig extends Config {
     )
     default boolean farmingBirdhouses() { return false; }
 
+    /* ===================== MINIGAME SETTINGS ====================== */
+
+    // PEST CONTROL
+    @ConfigSection(
+            name = "🦗 Pest Control",
+            description = "Pest Control minigame settings",
+            position = 50,
+            closedByDefault = true
+    )
+    String pestControlSection = "pestControlSection";
+
+    @ConfigItem(
+            keyName = "pestControlPriority1",
+            name = "NPC Priority 1",
+            description = "What NPC to attack as first option",
+            section = pestControlSection,
+            position = 0
+    )
+    default PestControlNpc pestControlPriority1() { return PestControlNpc.PORTAL; }
+
+    @ConfigItem(
+            keyName = "pestControlPriority2",
+            name = "NPC Priority 2",
+            description = "What NPC to attack as second option",
+            section = pestControlSection,
+            position = 1
+    )
+    default PestControlNpc pestControlPriority2() { return PestControlNpc.SPINNER; }
+
+    @ConfigItem(
+            keyName = "pestControlPriority3",
+            name = "NPC Priority 3",
+            description = "What NPC to attack as third option",
+            section = pestControlSection,
+            position = 2
+    )
+    default PestControlNpc pestControlPriority3() { return PestControlNpc.BRAWLER; }
+
+    @ConfigItem(
+            keyName = "pestControlAlchInBoat",
+            name = "Alch while waiting",
+            description = "Alch items while waiting in boat",
+            section = pestControlSection,
+            position = 3
+    )
+    default boolean pestControlAlchInBoat() { return false; }
+
+    @ConfigItem(
+            keyName = "pestControlAlchItem",
+            name = "Item to alch",
+            description = "Item name to alch",
+            section = pestControlSection,
+            position = 4
+    )
+    default String pestControlAlchItem() { return ""; }
+
+    @ConfigItem(
+            keyName = "pestControlQuickPrayer",
+            name = "Enable QuickPrayer",
+            description = "Enable quick prayer during games",
+            section = pestControlSection,
+            position = 5
+    )
+    default boolean pestControlQuickPrayer() { return false; }
+
+    @ConfigItem(
+            keyName = "pestControlSpecAttack",
+            name = "Use Special Attack on %",
+            description = "What percentage to use Special Attack",
+            section = pestControlSection,
+            position = 6
+    )
+    @Range(min = 25, max = 100)
+    default int pestControlSpecAttack() { return 100; }
+
+    @ConfigItem(
+            keyName = "pestControlWorld",
+            name = "World",
+            description = "Pest Control world to use",
+            section = pestControlSection,
+            position = 7
+    )
+    default int pestControlWorld() { return 344; }
+
+    @ConfigItem(
+            keyName = "pestControlAutoTravel",
+            name = "Auto Travel to Pest Control",
+            description = "Automatically travel to Pest Control when task starts",
+            section = pestControlSection,
+            position = 8
+    )
+    default boolean pestControlAutoTravel() { return true; }
+
     /* ===================== INTERNAL ====================== */
 
     @ConfigItem(
@@ -1012,6 +1105,16 @@ public interface AllInOneConfig extends Config {
 
         private final String name;
         CompostType(String name) { this.name = name; }
+        @Override public String toString() { return name; }
+    }
+
+    enum PestControlNpc {
+        PORTAL("Portal"),
+        BRAWLER("Brawler"),
+        SPINNER("Spinner");
+
+        private final String name;
+        PestControlNpc(String name) { this.name = name; }
         @Override public String toString() { return name; }
     }
 }
