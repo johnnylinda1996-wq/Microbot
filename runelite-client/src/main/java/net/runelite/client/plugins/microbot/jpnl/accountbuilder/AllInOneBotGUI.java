@@ -8,12 +8,11 @@ import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioTask;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioSkillTask;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioQuestTask;
 import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioMinigameTask;
-import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioTravelTask; // NEW
-import net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation; // NEW
-import net.runelite.api.coords.WorldPoint; // NEW
-import net.runelite.client.plugins.microbot.jpnl.accountbuilder.AllInOneConfig; // ADDED IMPORT
-import net.runelite.client.plugins.microbot.inventorysetups.MInventorySetupsPlugin; // NEW for inventory setups
-import net.runelite.client.plugins.microbot.inventorysetups.InventorySetup; // NEW for inventory setups
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.tasks.AioTravelTask;
+import net.runelite.client.plugins.microbot.jpnl.accountbuilder.travel.TravelLocation;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.microbot.inventorysetups.MInventorySetupsPlugin;
+import net.runelite.client.plugins.microbot.inventorysetups.InventorySetup;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -24,64 +23,38 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.prefs.Preferences;
 
 public class AllInOneBotGUI extends JFrame {
 
     private final AllInOneScript script;
-    private final AllInOneConfig config; // NEW: Direct config access for method updates
+    private final AllInOneConfig config;
 
-    // Theme Management (removed LIGHT theme)
-    private enum Theme {
-        DARK("🌙 Dark Theme", new Color(32, 36, 40), new Color(45, 50, 56), Color.WHITE, new Color(220, 50, 50)),
-        BLUE("💙 Blue Theme", new Color(25, 35, 45), new Color(35, 45, 60), Color.WHITE, new Color(100, 150, 255)),
-        GREEN("💚 Green Theme", new Color(20, 40, 30), new Color(30, 50, 40), Color.WHITE, new Color(80, 200, 120)),
-        RED("❤️ Red Theme", new Color(40, 20, 20), new Color(60, 30, 30), Color.WHITE, new Color(255, 100, 100));
-
-        final String displayName;
-        final Color background;
-        final Color panelBackground;
-        final Color foreground;
-        final Color accent;
-        final Color hoverColor;
-
-        Theme(String displayName, Color bg, Color panelBg, Color fg, Color accent) {
-            this.displayName = displayName;
-            this.background = bg;
-            this.panelBackground = panelBg;
-            this.foreground = fg;
-            this.accent = accent;
-            this.hoverColor = accent.brighter();
-        }
-    }
-
-    private Theme currentTheme = Theme.DARK;
-    private Preferences prefs = Preferences.userNodeForPackage(AllInOneBotGUI.class);
-
-    // Layout visibility options
-    private boolean showSkillPanel = true;
-    private boolean showQuestPanel = true;
-    private boolean showMinigamePanel = true;
-    private boolean showStatusPanel = true;
-    private boolean showControlPanel = true;
-    private boolean compactMode = true;
+    // Fixed blue theme colors
+    private static final Color BACKGROUND = new Color(25, 35, 45);
+    private static final Color PANEL_BACKGROUND = new Color(35, 45, 60);
+    private static final Color FOREGROUND = Color.WHITE;
+    private static final Color ACCENT = new Color(100, 150, 255);
+    private static final Color HOVER_COLOR = ACCENT.brighter();
 
     // Position preservation variables
-    private boolean preserveLocation = true;
+    private final boolean preserveLocation = true;
     private Point originalLocation;
+
+    // Add missing compactMode field
+    private final boolean compactMode = true;
 
     private JComboBox<SkillType> skillCombo;
     private JSpinner targetLevelSpinner;
-    private JComboBox<Object> trainingMethodCombo; // NEW: Dynamic training method selector
+    private JComboBox<Object> trainingMethodCombo;
     private JButton addSkillButton;
 
     private JComboBox<QuestType> questCombo;
     private JButton addQuestButton;
     private JComboBox<MinigameType> minigameCombo;
-    private JSpinner minigameDurationSpinner; // NEW: Duration for minigames
+    private JSpinner minigameDurationSpinner;
     private JButton addMinigameButton;
-    // --- Travel task components (NEW) ---
-    private JComboBox<Object> travelCombo; // TravelLocation values + group labels + "Custom..." (NEW refactored)
+
+    private JComboBox<Object> travelCombo;
     private JButton addTravelButton;
 
     private JButton removeSelectedButton;
@@ -97,13 +70,10 @@ public class AllInOneBotGUI extends JFrame {
     private JLabel xpRemainingLabel;
     private JProgressBar progressBar;
     private JLabel elapsedLabel;
-    // Added task counters
     private JLabel tasksSummaryLabel;
-    // Filter
-    // private JTextField filterField;
 
     private final Timer uiTimer;
-    private final Timer queueListLiteTimer; // NEW: lightweight list-only refresh timer
+    private final Timer queueListLiteTimer;
 
     private JRadioButton levelModeRadio;
     private JRadioButton timeModeRadio;
@@ -116,15 +86,10 @@ public class AllInOneBotGUI extends JFrame {
     private SystemTray tray;
     private TrayIcon trayIcon;
 
-    // New queue utility buttons
     private JButton saveButton;
     private JButton loadButton;
     private JButton shuffleButton;
-    //    private JButton duplicateButton;
-    //    private JButton topButton;
-    //    private JButton bottomButton;
 
-    // New model typed entries
     private DefaultListModel<TaskListEntry> taskModel;
     private JList<TaskListEntry> taskList;
 
@@ -145,67 +110,62 @@ public class AllInOneBotGUI extends JFrame {
     private Icon playIcon, pauseIcon, skipIcon, hideIcon, saveIconSmall, loadIconSmall, shuffleIcon;
 
     // Travel icons
-    private static final Map<TravelLocation, Icon> TRAVEL_ICONS = new EnumMap<>(TravelLocation.class); // NEW
-    private static Icon TRAVEL_CUSTOM_ICON; // NEW
+    private static final Map<TravelLocation, Icon> TRAVEL_ICONS = new EnumMap<>(TravelLocation.class);
+    private static Icon TRAVEL_CUSTOM_ICON;
 
-    // Keep panel references for language/theme updates
+    // Keep panel references for updates
     private JPanel skillPanelRef, questPanelRef, minigamePanelRef, queuePanelRef, controlPanelRef, statusPanelRef;
     private JPanel travelPanelRef;
+
     // Inline travel custom options
     private JPanel travelOptionsPanelInline;
     private JTextField customTravelNameField;
     private JSpinner customXSpinner, customYSpinner, customZSpinner;
+
     // Inline skill options container and component registry
     private JPanel skillOptionsPanelInline;
-    private Map<String, JComponent> skillOptionsComponentsInline = new HashMap<>();
+    private final Map<String, JComponent> skillOptionsComponentsInline = new HashMap<>();
 
     // Inline minigame options container and component registry
     private JPanel minigameOptionsPanelInline;
-    private Map<String, JComponent> minigameOptionsComponentsInline = new HashMap<>();
 
-    // Menu item references for language switching
-    private JMenu appearanceMenuRef; // to add language submenu here instead of Help
-    private JMenu languageMenuRef;
-
-    private JMenuItem resetLayoutItemRef; // For translation if desired later
-
-    // Store position to prevent unwanted repositioning
-    private Point savedLocation;
     private boolean locationInitialized = false;
 
-    // ================== BEGIN MODIFICATIONS ==================
     // Track last known window location to preserve position on any UI refresh/layout changes
     private Point lastKnownLocation = null;
-    // ================== END MODIFICATIONS ==================
 
     public AllInOneBotGUI(AllInOneScript script) {
         super("🚀 Account Builder v0.1");
         this.script = script;
-        this.config = script.getConfig(); // Direct config access
+        this.config = script.getConfig();
 
-        // Must be called before the frame becomes displayable (before pack()/setVisible())
+        // Must be called before the frame becomes displayable
         setUndecorated(true);
 
         // Set custom icon for the window
         setCustomWindowIcon();
 
-        loadPreferences();
         initComponents();
         createMenuBar();
         layoutComponents();
         attachListeners();
-        applyThemeTweaks();
+        applyBlueTheme();
         refreshQueue();
 
-        updateWindowSize();
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE); // Changed to hide when X is clicked
+        // Set fixed size - 1060x440px as requested
+        setSize(1060, 440);
+        setMinimumSize(new Dimension(1060, 440));
+        setMaximumSize(new Dimension(1060, 440));
+        setPreferredSize(new Dimension(1060, 440));
+        setResizable(false);
 
-        // Manually center on screen (more reliable for undecorated frames)
+        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+
+        // Manually center on screen
         centerOnScreen();
 
         // Store location after everything is set up
         SwingUtilities.invokeLater(() -> {
-            savedLocation = getLocation();
             locationInitialized = true;
         });
 
@@ -215,7 +175,7 @@ public class AllInOneBotGUI extends JFrame {
         uiTimer = new Timer(1000, e -> refreshStatus());
         uiTimer.start();
 
-        // NEW: lightweight list-only refresh every ~7 seconds (only updates JList model)
+        // Lightweight list-only refresh every ~7 seconds
         queueListLiteTimer = new Timer(7000, e -> refreshQueueListOnly());
         queueListLiteTimer.start();
 
@@ -266,106 +226,28 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 
-    private void loadPreferences() {
-        String themeName = prefs.get("theme", Theme.DARK.name());
-        try {
-            currentTheme = Theme.valueOf(themeName);
-        } catch (IllegalArgumentException e) {
-            currentTheme = Theme.DARK;
-        }
-
-        showSkillPanel = prefs.getBoolean("showSkillPanel", true);
-        showQuestPanel = prefs.getBoolean("showQuestPanel", true);
-        showMinigamePanel = prefs.getBoolean("showMinigamePanel", true);
-        showStatusPanel = prefs.getBoolean("showStatusPanel", true);
-        showControlPanel = prefs.getBoolean("showControlPanel", true);
-        // Default to compact mode and prefer it over any old saved value
-        compactMode = prefs.getBoolean("compactMode", true);
-
-        // Language support removed
-    }
-
-    private void savePreferences() {
-        prefs.put("theme", currentTheme.name());
-        prefs.putBoolean("showSkillPanel", showSkillPanel);
-        prefs.putBoolean("showQuestPanel", showQuestPanel);
-        prefs.putBoolean("showMinigamePanel", showMinigamePanel);
-        prefs.putBoolean("showStatusPanel", showStatusPanel);
-        prefs.putBoolean("showControlPanel", showControlPanel);
-        prefs.putBoolean("compactMode", compactMode);
-        // Language support removed
-    }
-
     private void createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
 
-        // Themes Menu (formerly Appearance). Clicking shows theme choices directly.
-        JMenu appearanceMenu = new JMenu("Theme's");
-        appearanceMenu.setIcon(generatePaletteIcon());
-        appearanceMenu.setHorizontalTextPosition(SwingConstants.RIGHT);
-        appearanceMenuRef = appearanceMenu;
-        // Add theme choices directly under the menu
-        ButtonGroup themeGroup = new ButtonGroup();
-        for (Theme theme : Theme.values()) {
-            JRadioButtonMenuItem themeItem = new JRadioButtonMenuItem(theme.displayName);
-            themeItem.setSelected(theme == currentTheme);
-            themeItem.addActionListener(e -> {
-                // Preserve current size and location when changing theme
-                Dimension prevSize = getSize();
-                Point prevLoc = getLocation();
-
-                currentTheme = theme;
-                applyThemeTweaks();
-                updatePanelVisibility(); // Force a complete UI refresh
-
-                // Re-pack layout, then restore size/location so GUI stays as user set it
-                try {
-                    pack();
-                    if (prevSize != null) setSize(prevSize);
-                    if (prevLoc != null) setLocation(prevLoc);
-                } catch (Exception ignore) {}
-
-                savePreferences();
-                SwingUtilities.invokeLater(this::repaint); // Ensure repaint happens
-            });
-            themeGroup.add(themeItem);
-            appearanceMenu.add(themeItem);
-        }
-
-        // Tools Menu
-        JMenu toolsMenu = new JMenu("🔧 Tools");
+        // Options Menu (renamed from Tools)
+        JMenu optionsMenu = new JMenu("🔧 Options");
 
         JMenuItem resetLayoutItem = new JMenuItem("Reset Layout");
-        resetLayoutItemRef = resetLayoutItem;
         resetLayoutItem.addActionListener(e -> resetLayout());
-        toolsMenu.add(resetLayoutItem);
+        optionsMenu.add(resetLayoutItem);
 
         JMenuItem exportQueueItem = new JMenuItem("Export Queue...");
         exportQueueItem.addActionListener(e -> exportQueue());
-        toolsMenu.add(exportQueueItem);
+        optionsMenu.add(exportQueueItem);
 
         JMenuItem importQueueItem = new JMenuItem("Import Queue...");
         importQueueItem.addActionListener(e -> importQueue());
-        toolsMenu.add(importQueueItem);
+        optionsMenu.add(importQueueItem);
 
-        // Help Menu
-        JMenu helpMenu = new JMenu("❓ Help");
+        // Add options menu to menu bar
+        menuBar.add(optionsMenu);
 
-        JMenuItem aboutItem = new JMenuItem("About");
-        aboutItem.addActionListener(e -> showAbout());
-        helpMenu.add(aboutItem);
-
-        JMenuItem shortcutsItem = new JMenuItem("Keyboard Shortcuts");
-        shortcutsItem.addActionListener(e -> showShortcuts());
-        helpMenu.add(shortcutsItem);
-
-        // Add working menus directly to the JMenuBar (required for proper menu behavior)
-        menuBar.add(appearanceMenu);
-        menuBar.add(toolsMenu);
-        menuBar.add(helpMenu);
-
-        // Centered title in the menu bar using symmetric fillers that mirror left menu widths
-        // Sequence: [Appearance][Tools][Help][leftFiller][Title][rightFiller]
+        // Centered title in the menu bar
         Component leftFiller = Box.createRigidArea(new Dimension(0, 0));
         menuBar.add(leftFiller);
         JLabel titleLabel;
@@ -375,7 +257,7 @@ public class AllInOneBotGUI extends JFrame {
             titleLabel = new JLabel("  Account Builder");
         }
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD));
-        titleLabel.setForeground(currentTheme.foreground);
+        titleLabel.setForeground(FOREGROUND);
         menuBar.add(titleLabel);
 
         Component rightFiller = Box.createRigidArea(new Dimension(0, 0));
@@ -383,12 +265,9 @@ public class AllInOneBotGUI extends JFrame {
 
         Runnable syncCenter = () -> {
             int totalLeftWidth = 0;
-            // Sum preferred widths of the first three menus (Appearance, Tools, Help)
-            for (int i = 0; i < Math.min(3, menuBar.getMenuCount()); i++) {
-                JMenu m = menuBar.getMenu(i);
-                if (m != null) {
-                    totalLeftWidth += m.getPreferredSize().width;
-                }
+            // Sum preferred widths of the menu
+            if (optionsMenu != null) {
+                totalLeftWidth += optionsMenu.getPreferredSize().width;
             }
             // Mirror left menu width on both sides of the title
             Dimension d = new Dimension(totalLeftWidth, 0);
@@ -423,16 +302,6 @@ public class AllInOneBotGUI extends JFrame {
         setJMenuBar(menuBar);
     }
 
-    private void updatePanelVisibility() {
-        Point currentPos = getLocation();
-        layoutComponents();
-        applyThemeTweaks();
-        updateWindowSize();
-        revalidate();
-        repaint();
-        SwingUtilities.invokeLater(() -> setLocation(currentPos));
-    }
-
     private JComponent wrapLeft(JComponent comp) {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         p.setOpaque(false);
@@ -441,18 +310,7 @@ public class AllInOneBotGUI extends JFrame {
     }
 
     private void resetLayout() {
-        showSkillPanel = true;
-        showQuestPanel = true;
-        showMinigamePanel = true;
-        showStatusPanel = true;
-        showControlPanel = true;
-        compactMode = true;
-        currentTheme = Theme.DARK;
-
-        taskList.setFixedCellHeight(compactMode ? 20 : 28);
-        updatePanelVisibility();
-        savePreferences();
-
+        taskList.setFixedCellHeight(20); // Compact mode height
         JOptionPane.showMessageDialog(this, "Layout has been reset to default!", "Reset Complete", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -572,7 +430,7 @@ public class AllInOneBotGUI extends JFrame {
         } else if (task instanceof AioMinigameTask) {
             AioMinigameTask m = (AioMinigameTask) task;
             return String.format("MINIGAME:%s", m.getMinigameType().name());
-        } else if (task instanceof AioTravelTask) { // NEW travel export
+        } else if (task instanceof AioTravelTask) {
             AioTravelTask tr = (AioTravelTask) task;
             if (tr.getTravelLocationOrNull() != null) {
                 return "TRAVEL:" + tr.getTravelLocationOrNull().name();
@@ -610,7 +468,7 @@ public class AllInOneBotGUI extends JFrame {
                 MinigameType minigameType = MinigameType.valueOf(parts[1]);
                 script.addMinigameTask(minigameType);
                 return true;
-            } else if ("TRAVEL_CUSTOM".equals(type) && parts.length >= 5) { // NEW parse custom travel
+            } else if ("TRAVEL_CUSTOM".equals(type) && parts.length >= 5) {
                 try {
                     String name = parts[1];
                     int x = Integer.parseInt(parts[2]);
@@ -619,7 +477,7 @@ public class AllInOneBotGUI extends JFrame {
                     script.addTravelTaskCustom(name, new WorldPoint(x,y,z));
                     return true;
                 } catch (Exception ignored) {}
-            } else if ("TRAVEL".equals(type) && parts.length >= 2) { // NEW parse preset travel
+            } else if ("TRAVEL".equals(type) && parts.length >= 2) {
                 try {
                     TravelLocation tl = TravelLocation.valueOf(parts[1]);
                     script.addTravelTask(tl);
@@ -630,66 +488,32 @@ public class AllInOneBotGUI extends JFrame {
         return false;
     }
 
-    private void showAbout() {
-        String aboutText = "<html><body style='width: 400px; padding: 15px; font-family: Arial, sans-serif;'>" +
-                "<h2 style='color: #ff6b35;'>🔥 Account Builder Pro v2.0</h2>" +
-                "<p><b>🚀 Ultimate RuneScape Automation Script</b></p>" +
-                "<hr>" +
-                "<p><b>✨ Premium Features:</b></p>" +
-                "<ul style='margin-left: 10px;'>" +
-                "<li>🎯 Advanced skill training with level/time targets</li>" +
-                "<li>📜 Quest automation with progress tracking</li>" +
-                "<li>🎮 Minigame support with duration control</li>" +
-                "<li>📊 Real-time progress monitoring & XP tracking</li>" +
-                "<li>💾 Queue save/load functionality</li>" +
-                "<li>🔄 Advanced queue management</li>" +
-                "<li>⚡ Lightning-fast performance optimization</li>" +
-                "<li>🛡️ Anti-ban protection features</li>" +
-                "</ul>" +
-                "<hr>" +
-                "<p><b>👨‍💻 Created by:</b> <span style='color: #4CAF50; font-weight: bold;'>JP96NL & AI</span></p>" +
-                "<hr>" +
-                "<p style='font-size: 11px; color: #888;'>" +
-                "🔥 Built with passion for the OSRS community<br>" +
-                "💪 Powered by advanced AI technology<br>" +
-                "🎮 For educational purposes only" +
-                "</p>" +
-                "</body></html>";
-
-        JOptionPane.showMessageDialog(this, aboutText, "About Account Builder Pro", JOptionPane.INFORMATION_MESSAGE);
-    }
-
     // --- Visual/theme helpers ---
-    private void applyThemeTweaks() {
-        // Apply theme colors immediately
-        Color bgPanel = currentTheme.background;
-        Color bgAlt = currentTheme.panelBackground;
-        Color accent = currentTheme.accent;
-        Color fgColor = currentTheme.foreground;
+    private void applyBlueTheme() {
         Font base = getFont() != null ? getFont() : new Font("SansSerif", Font.PLAIN, 12);
         Font bold = base.deriveFont(Font.BOLD, base.getSize2D());
 
         // Apply theme to main components immediately
-        getContentPane().setBackground(bgPanel);
+        getContentPane().setBackground(BACKGROUND);
 
         // Update MenuBar
         JMenuBar menuBar = getJMenuBar();
         if (menuBar != null) {
-            menuBar.setBackground(bgAlt);
-            menuBar.setForeground(fgColor);
+            menuBar.setBackground(PANEL_BACKGROUND);
+            menuBar.setForeground(FOREGROUND);
         }
 
         // Apply to task list immediately
         if (taskList != null) {
-            taskList.setBackground(bgAlt);
-            taskList.setForeground(fgColor);
+            taskList.setBackground(PANEL_BACKGROUND);
+            taskList.setForeground(FOREGROUND);
             taskList.repaint();
         }
 
         // Update progress bar
         if (progressBar != null) {
-            progressBar.setForeground(accent);
-            progressBar.setBackground(bgAlt);
+            progressBar.setForeground(ACCENT);
+            progressBar.setBackground(PANEL_BACKGROUND);
         }
 
         // Apply button styling
@@ -701,15 +525,15 @@ public class AllInOneBotGUI extends JFrame {
         for (JButton b : buttons) {
             if (b != null) {
                 b.setFocusPainted(false);
-                b.setBackground(bgAlt.darker());
-                b.setForeground(fgColor);
+                b.setBackground(PANEL_BACKGROUND.darker());
+                b.setForeground(FOREGROUND);
                 b.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(bgAlt.brighter(), 1, true),
+                        BorderFactory.createLineBorder(PANEL_BACKGROUND.brighter(), 1, true),
                         BorderFactory.createEmptyBorder(3,6,3,6)));
                 b.setMargin(new Insets(2,6,2,6));
                 b.setRolloverEnabled(true);
                 b.setOpaque(true);
-                installButtonHover(b, bgAlt.darker(), bgAlt, bgAlt.darker().darker());
+                installButtonHover(b, PANEL_BACKGROUND.darker(), PANEL_BACKGROUND, PANEL_BACKGROUND.darker().darker());
             }
         }
 
@@ -727,9 +551,9 @@ public class AllInOneBotGUI extends JFrame {
         JComboBox<?>[] combos = {skillCombo, questCombo, minigameCombo, trainingMethodCombo, travelCombo};
         for (JComboBox<?> combo : combos) {
             if (combo != null) {
-                combo.setBackground(bgAlt);
-                combo.setForeground(fgColor);
-                combo.setBorder(BorderFactory.createLineBorder(bgAlt.brighter(), 1, true));
+                combo.setBackground(PANEL_BACKGROUND);
+                combo.setForeground(FOREGROUND);
+                combo.setBorder(BorderFactory.createLineBorder(PANEL_BACKGROUND.brighter(), 1, true));
             }
         }
 
@@ -737,9 +561,9 @@ public class AllInOneBotGUI extends JFrame {
         JSpinner[] spinners = {targetLevelSpinner, minutesSpinner, minigameDurationSpinner};
         for (JSpinner spinner : spinners) {
             if (spinner != null) {
-                spinner.getEditor().getComponent(0).setBackground(bgAlt);
-                spinner.getEditor().getComponent(0).setForeground(fgColor);
-                spinner.setBorder(BorderFactory.createLineBorder(bgAlt.brighter(), 1, true));
+                spinner.getEditor().getComponent(0).setBackground(PANEL_BACKGROUND);
+                spinner.getEditor().getComponent(0).setForeground(FOREGROUND);
+                spinner.setBorder(BorderFactory.createLineBorder(PANEL_BACKGROUND.brighter(), 1, true));
                 try {
                     ((JComponent) spinner.getEditor().getComponent(0)).setBorder(BorderFactory.createEmptyBorder(2,4,2,4));
                 } catch (Exception ignored) {}
@@ -748,26 +572,26 @@ public class AllInOneBotGUI extends JFrame {
 
         // Apply to radio buttons
         if (levelModeRadio != null) {
-            levelModeRadio.setBackground(bgPanel);
-            levelModeRadio.setForeground(fgColor);
+            levelModeRadio.setBackground(BACKGROUND);
+            levelModeRadio.setForeground(FOREGROUND);
         }
         if (timeModeRadio != null) {
-            timeModeRadio.setBackground(bgPanel);
-            timeModeRadio.setForeground(fgColor);
+            timeModeRadio.setBackground(BACKGROUND);
+            timeModeRadio.setForeground(FOREGROUND);
         }
 
         // Force immediate visual update
         SwingUtilities.invokeLater(() -> {
             Container root = getContentPane();
             if (root != null) {
-                colorize(root, bgPanel, bgAlt, bold);
+                colorizeComponents(root, BACKGROUND, PANEL_BACKGROUND, bold);
                 revalidate();
                 repaint();
             }
         });
     }
 
-    private void colorize(Component c, Color bgPanel, Color bgAlt, Font bold) {
+    private void colorizeComponents(Component c, Color bgPanel, Color bgAlt, Font bold) {
         if (c instanceof JPanel) {
             c.setBackground(bgPanel);
         } else if (c instanceof JScrollPane) {
@@ -786,31 +610,31 @@ public class AllInOneBotGUI extends JFrame {
             boolean isArrow = b instanceof javax.swing.plaf.basic.BasicArrowButton;
             if (!insideCombo && !insideSpinner && !isArrow) {
                 b.setFocusPainted(false);
-                b.setBackground(currentTheme.panelBackground.darker());
-                b.setForeground(currentTheme.foreground);
+                b.setBackground(PANEL_BACKGROUND.darker());
+                b.setForeground(FOREGROUND);
                 b.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(currentTheme.panelBackground.brighter(), 1),
+                        BorderFactory.createLineBorder(PANEL_BACKGROUND.brighter(), 1),
                         BorderFactory.createEmptyBorder(3,6,3,6)));
                 b.setMargin(new Insets(2,6,2,6));
                 b.setRolloverEnabled(true);
                 b.setOpaque(true);
-                installButtonHover(b, currentTheme.panelBackground.darker(), currentTheme.panelBackground, currentTheme.panelBackground.darker().darker());
+                installButtonHover(b, PANEL_BACKGROUND.darker(), PANEL_BACKGROUND, PANEL_BACKGROUND.darker().darker());
             }
         } else if (c instanceof JComboBox) {
             JComboBox<?> combo = (JComboBox<?>) c;
-            combo.setBackground(currentTheme.panelBackground);
-            combo.setForeground(currentTheme.foreground);
+            combo.setBackground(PANEL_BACKGROUND);
+            combo.setForeground(FOREGROUND);
         } else if (c instanceof JSpinner) {
             JSpinner sp = (JSpinner) c;
             try {
                 Component ed = sp.getEditor().getComponent(0);
-                ed.setBackground(currentTheme.panelBackground);
-                ed.setForeground(currentTheme.foreground);
+                ed.setBackground(PANEL_BACKGROUND);
+                ed.setForeground(FOREGROUND);
             } catch (Exception ignored) {}
         }
         if (c instanceof JComponent) {
-            TitledBorder tb = null;
-            if ((tb = getTitledBorder((JComponent)c)) != null) {
+            TitledBorder tb = getTitledBorder((JComponent)c);
+            if (tb != null) {
                 tb.setTitleColor(Color.WHITE);
                 tb.setTitleFont(bold);
                 // Compact interior padding for titled panels (avoid repeated wrapping)
@@ -824,7 +648,7 @@ public class AllInOneBotGUI extends JFrame {
         }
         if (c instanceof Container) {
             for (Component ch : ((Container)c).getComponents()) {
-                colorize(ch, bgPanel, bgAlt, bold);
+                colorizeComponents(ch, bgPanel, bgAlt, bold);
             }
         }
     }
@@ -886,38 +710,15 @@ public class AllInOneBotGUI extends JFrame {
         b.putClientProperty("hoverInstalled", true);
     }
 
-    private void showShortcuts() {
-        String shortcutsText = "<html><body style='width: 350px; padding: 10px;'>" +
-                "<h2>⌨️ Keyboard Shortcuts</h2>" +
-                "<table>" +
-                "<tr><td><b>F1</b></td><td>Start/Resume bot</td></tr>" +
-                "<tr><td><b>F2</b></td><td>Pause bot</td></tr>" +
-                "<tr><td><b>F3</b></td><td>Skip current task</td></tr>" +
-                "<tr><td><b>F5</b></td><td>Refresh queue</td></tr>" +
-                "<tr><td><b>Ctrl+S</b></td><td>Save queue</td></tr>" +
-                "<tr><td><b>Ctrl+L</b></td><td>Load queue</td></tr>" +
-                "<tr><td><b>Delete</b></td><td>Remove selected task</td></tr>" +
-                "<tr><td><b>Double Click</b></td><td>Edit task</td></tr>" +
-                "<tr><td><b>Right Click</b></td><td>Context menu</td></tr>" +
-                "</table>" +
-                "</body></html>";
-
-        JOptionPane.showMessageDialog(this, shortcutsText, "Keyboard Shortcuts", JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    // NEW: Apply theme to dialog windows
+    // Apply theme to dialog windows
     private void applyDialogTheme(JDialog dialog) {
         if (dialog == null) return;
 
-        Color bgPanel = currentTheme.background;
-        Color bgAlt = currentTheme.panelBackground;
-        Color fgColor = currentTheme.foreground;
-
         // Apply theme to dialog
-        dialog.getContentPane().setBackground(bgPanel);
+        dialog.getContentPane().setBackground(BACKGROUND);
 
         // Apply theme to all components in the dialog
-        applyThemeToContainer(dialog.getContentPane(), bgPanel, bgAlt, fgColor);
+        applyThemeToContainer(dialog.getContentPane(), BACKGROUND, PANEL_BACKGROUND, FOREGROUND);
 
         dialog.revalidate();
         dialog.repaint();
@@ -957,7 +758,7 @@ public class AllInOneBotGUI extends JFrame {
         loadSkillIcons();
         loadQuestIcon();
         loadMinigameIcons();
-        loadTravelIcons(); // NEW
+        loadTravelIcons();
 
         skillCombo = new JComboBox<>(Arrays.stream(SkillType.values())
                 .sorted(Comparator.comparing(SkillType::name))
@@ -1640,11 +1441,6 @@ public class AllInOneBotGUI extends JFrame {
         return new TravelCustomResult(name, x, y, z);
     }
 
-   /* private static class TravelCustomResult {
-        final String name; final int x; final int y; final int z;
-        TravelCustomResult(String name, int x, int y, int z) { this.name = name; this.x = x; this.y = y; this.z = z; }
-    }*/
-
     // Helpers for custom travel enable (NEW)
     private boolean isTravelCustomSelected() {
         Object sel = travelCombo.getSelectedItem();
@@ -1767,77 +1563,41 @@ public class AllInOneBotGUI extends JFrame {
     }
 
     private void layoutComponents() {
-        if (compactMode) {
-            JPanel root = new JPanel(new BorderLayout(4,4));
-            root.setBorder(BorderFactory.createEmptyBorder(4,4,4,4));
-            // Left side becomes tabs to save space
-            root.add(buildCompactTabs(), BorderLayout.WEST);
-            root.add(buildQueuePanel(), BorderLayout.CENTER);
-            JPanel east = new JPanel();
-            east.setLayout(new BoxLayout(east, BoxLayout.Y_AXIS));
-            east.add(buildControlPanel());
-            east.add(Box.createVerticalStrut(4));
-            east.add(buildStatusPanel());
-            root.add(east, BorderLayout.EAST);
-            setContentPane(root);
-        } else {
-            JPanel left = new JPanel();
-            left.setLayout(new BoxLayout(left, BoxLayout.Y_AXIS));
-            if (showSkillPanel) left.add(buildSkillPanel());
-            left.add(Box.createVerticalStrut(6));
-            if (showQuestPanel) left.add(buildQuestPanel());
-            left.add(Box.createVerticalStrut(6));
-            if (showMinigamePanel) left.add(buildMinigamePanel());
-            left.add(Box.createVerticalStrut(6));
-            left.add(buildTravelPanel()); // NEW travel panel always shown
+        // Always use compact mode layout - using tabs to save space
+        JPanel root = new JPanel(new BorderLayout(4,4));
+        root.setBorder(BorderFactory.createEmptyBorder(4,4,4,4));
 
-            JPanel middle = buildQueuePanel();
+        // Left side becomes tabs to save space
+        root.add(buildCompactTabs(), BorderLayout.WEST);
+        root.add(buildQueuePanel(), BorderLayout.CENTER);
 
-            JPanel right = new JPanel();
-            right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
-            if (showControlPanel) right.add(buildControlPanel());
-            right.add(Box.createVerticalStrut(6));
-            if (showStatusPanel) right.add(buildStatusPanel());
+        JPanel east = new JPanel();
+        east.setLayout(new BoxLayout(east, BoxLayout.Y_AXIS));
+        east.add(buildControlPanel());
+        east.add(Box.createVerticalStrut(4));
+        east.add(buildStatusPanel());
+        root.add(east, BorderLayout.EAST);
 
-            JPanel root = new JPanel(new BorderLayout(8,8));
-            root.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
-            root.add(left, BorderLayout.WEST);
-            root.add(middle, BorderLayout.CENTER);
-            root.add(right, BorderLayout.EAST);
-            setContentPane(root);
-        }
+        setContentPane(root);
     }
 
     private JPanel buildCompactTabs() {
         JTabbedPane tp = new JTabbedPane();
-        tp.addTab(translate("Skill"), buildSkillPanel());
-        tp.addTab(translate("Quest"), buildQuestPanel());
-        tp.addTab(translate("Minigame"), buildMinigamePanel());
-        tp.addTab(translate("Travel"), buildTravelPanel()); // NEW tab
+        tp.addTab("Skill", buildSkillPanel());
+        tp.addTab("Quest", buildQuestPanel());
+        tp.addTab("Minigame", buildMinigamePanel());
+        tp.addTab("Travel", buildTravelPanel());
         JPanel wrap = new JPanel(new BorderLayout());
         wrap.add(tp, BorderLayout.CENTER);
         return wrap;
     }
-
-    // ================== BEGIN MODIFICATIONS ==================
-    // Preserve current position explicitly and avoid centering again
-    private void updateWindowSize() {
-        if (compactMode) {
-            setMinimumSize(new Dimension(560, 440));
-        } else {
-            setMinimumSize(new Dimension(820, 600));
-        }
-        pack();
-        if (lastKnownLocation != null) setLocation(lastKnownLocation); // restore
-    }
-    // ================== END MODIFICATIONS ==================
 
     // Reliable centering for undecorated frames
     private void centerOnScreen() {
         try {
             // Ensure we have a valid size
             if (getWidth() == 0 || getHeight() == 0) {
-                pack();
+                setSize(1060, 440);
             }
             Point center = GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
             int x = center.x - getWidth() / 2;
@@ -2334,27 +2094,7 @@ public class AllInOneBotGUI extends JFrame {
         // Additional skill-specific options
         Map<String, JComponent> additionalComponents = new HashMap<>();
         gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; addSkillSpecificOptions(skillType, configPanel, additionalComponents, gbc);
-        // --- Inline minigame options (NEW) ---
-        gbc.gridx=0; gbc.gridy++; gbc.gridwidth=2; gbc.fill = GridBagConstraints.BOTH;
-        if (minigameOptionsPanelInline == null) minigameOptionsPanelInline = new JPanel(new GridBagLayout());
-        minigameOptionsPanelInline.setOpaque(false);
-        // Ensure panel isn't attached elsewhere before wrapping in a scroll pane
-        if (minigameOptionsPanelInline.getParent() != null) {
-            java.awt.Container p2 = minigameOptionsPanelInline.getParent();
-            if (p2 instanceof javax.swing.JViewport && p2.getParent() instanceof javax.swing.JScrollPane) {
-                ((javax.swing.JViewport) p2).remove(minigameOptionsPanelInline);
-            } else {
-                p2.remove(minigameOptionsPanelInline);
-            }
-        }
-        javax.swing.JScrollPane minigameScroll2 = new javax.swing.JScrollPane(minigameOptionsPanelInline);
-        minigameScroll2.setBorder(null);
-        minigameScroll2.setOpaque(false);
-        minigameScroll2.getViewport().setOpaque(false);
-        minigameScroll2.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-        minigameScroll2.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        configPanel.add(minigameScroll2, gbc);
-        rebuildInlineMinigameOptions();
+
         // Add the configuration panel to the main dialog content
         mainPanel.add(configPanel, BorderLayout.CENTER);
 
@@ -2559,41 +2299,8 @@ public class AllInOneBotGUI extends JFrame {
         boolean isCurrent;
     }
 
-    // ================== BEGIN MODIFICATIONS ==================
-    // Removed language system: ensure translate() is identity and drop language state
     private String translate(String key) { return key; }
-    // ================== END MODIFICATIONS ==================
 
-    private void applyLanguage() {
-        if (addSkillButton != null) addSkillButton.setText("Add Skill Task");
-        if (addQuestButton != null) addQuestButton.setText("Add Quest Task");
-        if (addMinigameButton != null) addMinigameButton.setText("Add Minigame Task");
-        if (addTravelButton != null) addTravelButton.setText("Add Travel Task");
-        if (removeSelectedButton != null) removeSelectedButton.setText("Remove Selected");
-        if (startButton != null) startButton.setText("Start"); // shortened
-        if (pauseButton != null) pauseButton.setText(script.isPaused()?"Resume":"Pause");
-        if (clearButton != null) clearButton.setText("Clear List");
-        if (refreshButton != null) refreshButton.setText("Refresh");
-        if (skipButton != null) skipButton.setText("Skip"); // shortened
-        if (hideButton != null) hideButton.setText("Hide");
-        if (saveButton != null) saveButton.setText("Save");
-        if (loadButton != null) loadButton.setText("Load");
-        if (shuffleButton != null) shuffleButton.setText("Shuffle");
-        if (editSelectedButton != null) editSelectedButton.setText("Edit");
-        if (moveUpButton != null) moveUpButton.setToolTipText("Move Up");
-        if (moveDownButton != null) moveDownButton.setToolTipText("Move Down");
-        if (levelModeRadio != null) levelModeRadio.setText("Target Level");
-        if (timeModeRadio != null) timeModeRadio.setText("Duration (min)");
-        updatePanelBorder(skillPanelRef, "Skill Task");
-        updatePanelBorder(questPanelRef, "Quest Task");
-        updatePanelBorder(minigamePanelRef, "Minigame Task");
-        updatePanelBorder(queuePanelRef, "Queue");
-        updatePanelBorder(controlPanelRef, "Control");
-        updatePanelBorder(statusPanelRef, "Status");
-        updatePanelBorder(travelPanelRef, "Travel Task");
-    }
-
-    // NEW: enhanced control buttons sizing for better visibility and usability
     private void enhancePrimaryControlButtons() {
         JButton[] primaryButtons = { startButton, pauseButton, skipButton, hideButton };
         for (JButton b : primaryButtons) {
@@ -2995,7 +2702,7 @@ public class AllInOneBotGUI extends JFrame {
         JButton ok = new JButton("OK"); JButton cancel = new JButton("Cancel");
         final boolean[] result = {false};
         ok.addActionListener(e -> { updateConfigFromDialog(skillType, methodCombo, extra); result[0] = true; dialog.dispose(); });
-        cancel.addActionListener(e -> { dialog.dispose(); });
+        cancel.addActionListener(e -> dialog.dispose());
         buttons.add(ok); buttons.add(cancel);
         gbc.gridy++; panel.add(buttons, gbc);
         dialog.add(panel);
@@ -3067,7 +2774,7 @@ public class AllInOneBotGUI extends JFrame {
                 JSpinner traps = new JSpinner(new SpinnerNumberModel(0,0,5,1)); addRow.accept("Traps:", traps); components.put("traps", traps);
                 JCheckBox relay = new JCheckBox("Relay?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(relay, gbc); components.put("relay", relay); gbc.gridy++; break; }
             case FARMING: {
-                JComboBox<Object> compost = new JComboBox<>(AllInOneConfig.CompostType.values()); addRow.accept("Compost:", compost); components.put("compost", compost);
+                JComboBox<Object> compost = new JComboBox<>(AllInOneConfig.CompostType.values()); addRow.accept("Compost:", compost); components.put("farmingCompost", compost);
                 JCheckBox bird = new JCheckBox("Birdhouses?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(bird, gbc); components.put("birdhouses", bird); gbc.gridy++; break; }
             case CONSTRUCTION: {
                 JCheckBox servant = new JCheckBox("Servant?"); gbc.gridx=0; gbc.gridwidth=2; panel.add(servant, gbc); components.put("servant", servant); gbc.gridy++; break; }
@@ -3246,4 +2953,34 @@ public class AllInOneBotGUI extends JFrame {
             }
         } catch (Exception ignored) {}
     }
+
+    private void applyLanguage() {
+        if (addSkillButton != null) addSkillButton.setText("Add Skill Task");
+        if (addQuestButton != null) addQuestButton.setText("Add Quest Task");
+        if (addMinigameButton != null) addMinigameButton.setText("Add Minigame Task");
+        if (addTravelButton != null) addTravelButton.setText("Add Travel Task");
+        if (removeSelectedButton != null) removeSelectedButton.setText("Remove Selected");
+        if (startButton != null) startButton.setText("Start");
+        if (pauseButton != null) pauseButton.setText(script.isPaused()?"Resume":"Pause");
+        if (clearButton != null) clearButton.setText("Clear List");
+        if (refreshButton != null) refreshButton.setText("Refresh");
+        if (skipButton != null) skipButton.setText("Skip");
+        if (hideButton != null) hideButton.setText("Hide");
+        if (saveButton != null) saveButton.setText("Save");
+        if (loadButton != null) loadButton.setText("Load");
+        if (shuffleButton != null) shuffleButton.setText("Shuffle");
+        if (editSelectedButton != null) editSelectedButton.setText("Edit");
+        if (moveUpButton != null) moveUpButton.setToolTipText("Move Up");
+        if (moveDownButton != null) moveDownButton.setToolTipText("Move Down");
+        if (levelModeRadio != null) levelModeRadio.setText("Target Level");
+        if (timeModeRadio != null) timeModeRadio.setText("Duration (min)");
+        updatePanelBorder(skillPanelRef, "Skill Task");
+        updatePanelBorder(questPanelRef, "Quest Task");
+        updatePanelBorder(minigamePanelRef, "Minigame Task");
+        updatePanelBorder(queuePanelRef, "Queue");
+        updatePanelBorder(controlPanelRef, "Control");
+        updatePanelBorder(statusPanelRef, "Status");
+        updatePanelBorder(travelPanelRef, "Travel Task");
+    }
 }
+
