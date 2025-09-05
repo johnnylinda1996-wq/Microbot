@@ -27,7 +27,7 @@ public class PestControlOverlay extends OverlayPanel {
         try {
             panelComponent.setPreferredSize(new Dimension(200, 300));
             panelComponent.getChildren().add(TitleComponent.builder()
-                    .text("Account Builder Pest Control V" + PestControlScript.version)
+                    .text("Pest Control " + PestControlScript.version)
                     .color(Color.GREEN)
                     .build());
 
