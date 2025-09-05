@@ -865,6 +865,143 @@ public interface AllInOneConfig extends Config {
     )
     default String pestControlInventorySetup() { return ""; }
 
+    // NIGHTMARE ZONE
+    @ConfigSection(
+            name = "💀 Nightmare Zone",
+            description = "Nightmare Zone minigame settings",
+            position = 51,
+            closedByDefault = true
+    )
+    String nmzSection = "nmzSection";
+
+    @ConfigItem(
+            keyName = "nmzShowOverlay",
+            name = "Show NMZ Overlay",
+            description = "Display NMZ points and absorption overlay",
+            section = nmzSection,
+            position = 0
+    )
+    default boolean nmzShowOverlay() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzShowPoints",
+            name = "Show Points",
+            description = "Display current NMZ points in overlay",
+            section = nmzSection,
+            position = 1
+    )
+    default boolean nmzShowPoints() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzShowAbsorption",
+            name = "Show Absorption",
+            description = "Display absorption points in overlay",
+            section = nmzSection,
+            position = 2
+    )
+    default boolean nmzShowAbsorption() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzAbsorptionThreshold",
+            name = "Absorption Threshold",
+            description = "Drink absorption potion below this amount",
+            section = nmzSection,
+            position = 3
+    )
+    @Range(min = 1, max = 1000)
+    default int nmzAbsorptionThreshold() { return 50; }
+
+    @ConfigItem(
+            keyName = "nmzAbsorptionColorAboveThreshold",
+            name = "Color Above Threshold",
+            description = "Absorption text color when above threshold",
+            section = nmzSection,
+            position = 4
+    )
+    default java.awt.Color nmzAbsorptionColorAboveThreshold() { return java.awt.Color.YELLOW; }
+
+    @ConfigItem(
+            keyName = "nmzAbsorptionColorBelowThreshold",
+            name = "Color Below Threshold",
+            description = "Absorption text color when below threshold",
+            section = nmzSection,
+            position = 5
+    )
+    default java.awt.Color nmzAbsorptionColorBelowThreshold() { return java.awt.Color.RED; }
+
+    @ConfigItem(
+            keyName = "nmzOverloadEarlyWarningSeconds",
+            name = "Overload Early Warning",
+            description = "Warning seconds before overload expires",
+            section = nmzSection,
+            position = 6
+    )
+    @Range(min = 0, max = 300)
+    default int nmzOverloadEarlyWarningSeconds() { return 30; }
+
+    @ConfigItem(
+            keyName = "nmzUseSpecialAttack",
+            name = "Use Special Attack",
+            description = "Use special attack when available",
+            section = nmzSection,
+            position = 7
+    )
+    default boolean nmzUseSpecialAttack() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzUseQuickPrayer",
+            name = "Use Quick Prayer",
+            description = "Enable quick prayer during NMZ",
+            section = nmzSection,
+            position = 8
+    )
+    default boolean nmzUseQuickPrayer() { return false; }
+
+    @ConfigItem(
+            keyName = "nmzUsePowerUps",
+            name = "Use Power-ups",
+            description = "Automatically use power-ups",
+            section = nmzSection,
+            position = 9
+    )
+    default boolean nmzUsePowerUps() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzPowerSurgeNotification",
+            name = "Power Surge Notification",
+            description = "Show notification for Power Surge",
+            section = nmzSection,
+            position = 10
+    )
+    default boolean nmzPowerSurgeNotification() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzRecurrentDamageNotification",
+            name = "Recurrent Damage Notification",
+            description = "Show notification for Recurrent Damage",
+            section = nmzSection,
+            position = 11
+    )
+    default boolean nmzRecurrentDamageNotification() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzZapperNotification",
+            name = "Zapper Notification",
+            description = "Show notification for Zapper",
+            section = nmzSection,
+            position = 12
+    )
+    default boolean nmzZapperNotification() { return true; }
+
+    @ConfigItem(
+            keyName = "nmzUltimateForceNotification",
+            name = "Ultimate Force Notification",
+            description = "Show notification for Ultimate Force",
+            section = nmzSection,
+            position = 13
+    )
+    default boolean nmzUltimateForceNotification() { return true; }
+
     /* ===================== INTERNAL ====================== */
 
     @ConfigItem(

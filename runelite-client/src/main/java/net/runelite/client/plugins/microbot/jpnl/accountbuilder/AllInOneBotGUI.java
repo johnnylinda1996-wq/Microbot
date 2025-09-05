@@ -2885,6 +2885,67 @@ public class AllInOneBotGUI extends JFrame {
                 addRow.accept("Inventory Setup:", setupCombo);
                 break;
             }
+            case NIGHTMARE_ZONE: {
+                hasOptions = true;
+                final String nmzGroup = "allInOneAio";
+                ConfigManager cm = script.getConfigManager();
+                java.util.function.BiFunction<String, String, String> getStr = (group, key) -> { try { return cm.getConfiguration(group, key); } catch (Exception e) { return null; } };
+                java.util.function.BiConsumer<String, String> setStr = (key, val) -> { try { cm.setConfiguration(nmzGroup, key, val); } catch (Exception ignored) {} };
+                java.util.function.BiConsumer<String, JComponent> addRow = (label, comp) -> {
+                    gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE; minigameOptionsPanelInline.add(new JLabel(label), gbc);
+                    gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0; minigameOptionsPanelInline.add(comp, gbc); gbc.gridy++; };
+
+                // Show Overlay
+                boolean showOverlay = Boolean.parseBoolean(getStr.apply(nmzGroup, "nmzShowOverlay"));
+                JCheckBox showOverlayCb = new JCheckBox("Show NMZ Overlay");
+                showOverlayCb.setSelected(showOverlay);
+                showOverlayCb.addActionListener(ev -> setStr.accept("nmzShowOverlay", Boolean.toString(showOverlayCb.isSelected())));
+                addRow.accept("Overlay:", showOverlayCb);
+
+                // Absorption Threshold
+                int absorptionThreshold = 50;
+                try { String s = getStr.apply(nmzGroup, "nmzAbsorptionThreshold"); if (s != null) absorptionThreshold = Integer.parseInt(s); } catch (Exception ignored) {}
+                JSpinner absorptionSpin = new JSpinner(new SpinnerNumberModel(absorptionThreshold, 1, 1000, 10));
+                absorptionSpin.addChangeListener(ev -> setStr.accept("nmzAbsorptionThreshold", ((Integer) absorptionSpin.getValue()).toString()));
+                addRow.accept("Absorption Threshold:", absorptionSpin);
+
+                // Use Special Attack
+                boolean useSpec = Boolean.parseBoolean(getStr.apply(nmzGroup, "nmzUseSpecialAttack"));
+                JCheckBox useSpecCb = new JCheckBox("Use Special Attack");
+                useSpecCb.setSelected(useSpec);
+                useSpecCb.addActionListener(ev -> setStr.accept("nmzUseSpecialAttack", Boolean.toString(useSpecCb.isSelected())));
+                addRow.accept("Special Attack:", useSpecCb);
+
+                // Use Quick Prayer
+                boolean useQP = Boolean.parseBoolean(getStr.apply(nmzGroup, "nmzUseQuickPrayer"));
+                JCheckBox useQPCb = new JCheckBox("Use Quick Prayer");
+                useQPCb.setSelected(useQP);
+                useQPCb.addActionListener(ev -> setStr.accept("nmzUseQuickPrayer", Boolean.toString(useQPCb.isSelected())));
+                addRow.accept("Quick Prayer:", useQPCb);
+
+                // Use Power-ups
+                boolean usePowerUps = Boolean.parseBoolean(getStr.apply(nmzGroup, "nmzUsePowerUps"));
+                JCheckBox usePowerUpsCb = new JCheckBox("Use Power-ups");
+                usePowerUpsCb.setSelected(usePowerUps);
+                usePowerUpsCb.addActionListener(ev -> setStr.accept("nmzUsePowerUps", Boolean.toString(usePowerUpsCb.isSelected())));
+                addRow.accept("Power-ups:", usePowerUpsCb);
+
+                // Overload Early Warning
+                int overloadWarning = 30;
+                try { String s = getStr.apply(nmzGroup, "nmzOverloadEarlyWarningSeconds"); if (s != null) overloadWarning = Integer.parseInt(s); } catch (Exception ignored) {}
+                JSpinner overloadSpin = new JSpinner(new SpinnerNumberModel(overloadWarning, 0, 300, 5));
+                overloadSpin.addChangeListener(ev -> setStr.accept("nmzOverloadEarlyWarningSeconds", ((Integer) overloadSpin.getValue()).toString()));
+                addRow.accept("Overload Warning (s):", overloadSpin);
+
+                // Power-up Notifications
+                boolean powerSurge = Boolean.parseBoolean(getStr.apply(nmzGroup, "nmzPowerSurgeNotification"));
+                JCheckBox powerSurgeCb = new JCheckBox("Power Surge Notifications");
+                powerSurgeCb.setSelected(powerSurge);
+                powerSurgeCb.addActionListener(ev -> setStr.accept("nmzPowerSurgeNotification", Boolean.toString(powerSurgeCb.isSelected())));
+                addRow.accept("Notifications:", powerSurgeCb);
+
+                break;
+            }
             default: {
                 // No specific options -> show centered placeholder so content appears mid-tab
                 hasOptions = false;
@@ -2937,4 +2998,3 @@ public class AllInOneBotGUI extends JFrame {
         }
     }
 }
-
