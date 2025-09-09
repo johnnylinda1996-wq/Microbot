@@ -1,0 +1,38 @@
+server:
+  port: 8080
+  address: 127.0.0.1
+
+spring:
+  application:
+    name: mule-bridge
+  main:
+    banner-mode: console
+    log-startup-info: true
+
+logging:
+  level:
+    root: INFO
+    net.runelite.microbot.mule.bridge: INFO
+    org.springframework.web: INFO
+    org.springframework.boot: INFO
+    org.apache.tomcat: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/mule-bridge.log
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Custom application info
+info:
+  app:
+    name: Microbot Mule Bridge
+    description: Central communication hub for mule trading
+    version: 1.0.0
