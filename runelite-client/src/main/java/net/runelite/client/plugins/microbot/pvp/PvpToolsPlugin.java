@@ -42,7 +42,7 @@ import static net.runelite.client.plugins.microbot.util.player.Rs2Pvp.isAttackab
         enabledByDefault = false,
         description = "Enable the PvP Tools panel",
         tags = {"panel", "pvp", "pk", "pklite", "renderself"},
-        hidden = true
+        hidden = false
 )
 public class PvpToolsPlugin extends Plugin
 {
