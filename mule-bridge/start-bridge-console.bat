@@ -12,7 +12,7 @@ echo.
 echo.
 
 echo [%time%] Starting Spring Boot application...
-java -jar target\MuleBridge.jar
+java -jar target\mule-bridge-1.0.0.jar
 
 echo.
 echo  Options:
