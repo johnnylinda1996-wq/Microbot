@@ -25,7 +25,8 @@ import java.util.function.Consumer;
 public class MuleBridgeClient {
 
     private static final String DEFAULT_BRIDGE_URL = "http://localhost:8080";
-    private static MuleBridgeClient instance;
+    // Maintain instances per bridge URL to avoid stale singleton URL issues
+    private static final java.util.concurrent.ConcurrentHashMap<String, MuleBridgeClient> INSTANCES = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -56,14 +57,8 @@ public class MuleBridgeClient {
      * Get singleton instance with custom bridge URL
      */
     public static MuleBridgeClient getInstance(String bridgeUrl) {
-        if (instance == null) {
-            synchronized (MuleBridgeClient.class) {
-                if (instance == null) {
-                    instance = new MuleBridgeClient(bridgeUrl);
-                }
-            }
-        }
-        return instance;
+        final String key = bridgeUrl == null ? DEFAULT_BRIDGE_URL : bridgeUrl;
+        return INSTANCES.computeIfAbsent(key, MuleBridgeClient::new);
     }
 
     /**
@@ -91,14 +86,22 @@ public class MuleBridgeClient {
                 // Get current player name (requester)
                 String requesterUsername = getCurrentPlayerName();
 
+                // Convert MuleTradeItem objects to TradeItem objects for the bridge
+                List<TradeItem> tradeItems = items.stream()
+                        .map(MuleTradeItem::toTradeItem)
+                        .collect(java.util.stream.Collectors.toList());
+
                 // Build request JSON
                 MuleRequestData requestData = new MuleRequestData();
                 requestData.requesterUsername = requesterUsername;
                 requestData.muleAccount = muleAccount;
                 requestData.location = location;
-                requestData.items = items;
+                requestData.items = tradeItems; // Now using converted TradeItem objects
 
                 String requestBody = objectMapper.writeValueAsString(requestData);
+
+                log.info("Sending mule request: requester={}, muleAccount={}, location={}, items={}",
+                        requesterUsername, muleAccount, location, tradeItems.size());
 
                 // Send HTTP request
                 HttpRequest request = HttpRequest.newBuilder()
@@ -333,12 +336,26 @@ public class MuleBridgeClient {
         return java.util.Collections.emptyList();
     }
 
-    // Data classes for requests
+    // Data classes for requests - Updated to match bridge server format
     private static class MuleRequestData {
         public String requesterUsername;
         public String muleAccount;
         public String location;
-        public List<MuleTradeItem> items;
+        public List<TradeItem> items;  // Changed from MuleTradeItem to TradeItem to match bridge
+    }
+
+    public static class TradeItem {  // Renamed and updated to match bridge model
+        public int itemId;
+        public String itemName;
+        public int quantity;
+
+        public TradeItem() {}
+
+        public TradeItem(int itemId, String itemName, int quantity) {
+            this.itemId = itemId;
+            this.itemName = itemName;
+            this.quantity = quantity;
+        }
     }
 
     public static class MuleTradeItem {
@@ -352,6 +369,11 @@ public class MuleBridgeClient {
             this.itemId = itemId;
             this.itemName = itemName;
             this.quantity = quantity;
+        }
+
+        // Convert to bridge format
+        public TradeItem toTradeItem() {
+            return new TradeItem(itemId, itemName, quantity);
         }
     }
 

@@ -14,8 +14,8 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import javax.inject.Inject;
 
 @PluginDescriptor(
-        name = PluginDescriptor.Mocrosoft + "Mule Test",
-        description = "Test script for mule system - automatically requests mule when GP threshold is reached",
+        name = "Mule Test",
+        description = "Test script for mule system - automatically requests mule on a time interval (drop-trade only)",
         tags = {"mule", "trading", "microbot", "test"},
         enabledByDefault = false
 )
@@ -45,7 +45,7 @@ public class MuleTestPlugin extends Plugin {
             overlayManager.add(muleTestOverlay);
         }
         muleTestScript.run(config);
-        log.info("Mule Test Plugin started - GP threshold: {}", config.gpThreshold());
+        log.info("Mule Test Plugin started - interval: {} hours", config.muleIntervalHours());
     }
 
     @Override

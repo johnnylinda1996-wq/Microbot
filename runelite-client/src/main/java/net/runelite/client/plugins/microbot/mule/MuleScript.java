@@ -118,14 +118,24 @@ public class MuleScript extends Script {
         System.out.println("Client not logged in, attempting automatic login...");
 
         try {
-            // Use the robust login logic from AutoLoginScript
-            performRobustLogin();
+            // Use the world selection logic from config
+            int targetWorld;
+            if (config.useRandomWorld()) {
+                targetWorld = Login.getRandomWorld(config.isMember());
+                log.info("Using random world: {}", targetWorld);
+            } else {
+                targetWorld = config.world();
+                log.info("Using specific world: {}", targetWorld);
+            }
+
+            // Use the proper Login constructor with world selection
+            new Login(targetWorld);
 
             // Wait for login to complete with timeout
             boolean loginSuccessful = Global.sleepUntil(Microbot::isLoggedIn, 30000);
 
             if (loginSuccessful && Microbot.isLoggedIn()) {
-                System.out.println("Successfully logged in automatically");
+                System.out.println("Successfully logged in automatically to world " + targetWorld);
                 currentState = MuleState.WALKING;
                 updateRequestStatus("PROCESSING", "WALKING");
             } else {
@@ -142,38 +152,13 @@ public class MuleScript extends Script {
     }
 
     private void performRobustLogin() {
+        // This method is no longer needed as we use the proper Login constructor
+        // Keeping it for backward compatibility but redirecting to new logic
         try {
-            // Check current login screen state like AutoLoginScript does
-            if (Microbot.getClient() != null && Microbot.getClient().getGameState() == net.runelite.api.GameState.LOGIN_SCREEN) {
-
-                int currentLoginIndex = Microbot.getClient().getLoginIndex();
-                System.out.println("Login screen detected, login index: " + currentLoginIndex);
-
-                // Handle different login screen states
-                if (currentLoginIndex == 3 || currentLoginIndex == 24) {
-                    System.out.println("Detected disconnection screen, handling...");
-                    // Will be handled by Login constructor
-                } else if (currentLoginIndex == 4 || currentLoginIndex == 3) {
-                    System.err.println("Authentication failed - check credentials in RuneLite");
-                    throw new RuntimeException("Authentication failed");
-                } else if (currentLoginIndex == 34) {
-                    System.err.println("Account is not a member, cannot login to members world");
-                    throw new RuntimeException("Non-member account on members world");
-                }
-
-                // Perform login using existing Login utility (like AutoLoginScript does)
-                System.out.println("Attempting login with saved credentials...");
-                new Login(); // Use default login with saved RuneLite credentials
-
-            } else {
-                System.err.println("Not on login screen, current game state: " +
-                    (Microbot.getClient() != null ? Microbot.getClient().getGameState() : "null"));
-                throw new RuntimeException("Not on login screen");
-            }
-
+            int targetWorld = config.useRandomWorld() ? Login.getRandomWorld(config.isMember()) : config.world();
+            new Login(targetWorld);
         } catch (Exception e) {
-            System.err.println("Error in performRobustLogin: " + e.getMessage());
-            throw e;
+            throw new RuntimeException("Login failed: " + e.getMessage(), e);
         }
     }
 
@@ -233,49 +218,347 @@ public class MuleScript extends Script {
             String requesterUsername = currentRequest.getRequesterUsername();
             System.out.println("Waiting for trade from: " + requesterUsername);
 
-            long tradeWaitStart = System.currentTimeMillis();
-            long maxWaitTime = (long) config.maxTradeWaitTime() * 60 * 1000; // Convert to milliseconds
+            // Check if this is a drop trade request (based on request data or config)
+            boolean isDropTrade = isDropTradeRequest(currentRequest);
 
-            // Wait for incoming trade request using widget detection
-            Global.sleepUntil(() -> hasIncomingTradeRequest() ||
-                       (System.currentTimeMillis() - tradeWaitStart) > maxWaitTime, (int) maxWaitTime);
-
-            if (!hasIncomingTradeRequest()) {
-                System.err.println("No trade request received within timeout");
-                currentState = MuleState.ERROR;
-                updateRequestStatus("FAILED", "Trade timeout");
-                return;
-            }
-
-            // Accept the trade if it's from the correct player
-            String tradePartner = getTradePartnerName();
-            if (tradePartner != null && tradePartner.equalsIgnoreCase(requesterUsername)) {
-                System.out.println("Accepting trade from: " + tradePartner);
-                acceptTrade();
-
-                // Wait for trade completion
-                Global.sleepUntil(() -> !isTradeWindowOpen(), 30000);
-
-                if (!isTradeWindowOpen()) {
-                    System.out.println("Trade completed successfully");
-                    currentState = config.logoutAfterTrade() ? MuleState.LOGGING_OUT : MuleState.WAITING;
-                    updateRequestStatus("COMPLETED", "Trade completed");
-                    currentRequest = null;
-                } else {
-                    System.err.println("Trade did not complete properly");
-                    currentState = MuleState.ERROR;
-                    updateRequestStatus("FAILED", "Trade incomplete");
-                }
+            if (isDropTrade) {
+                handleDropTrade(requesterUsername);
             } else {
-                System.err.println("Trade request from wrong player: " + tradePartner + " (expected: " + requesterUsername + ")");
-                declineTrade();
-                // Continue waiting for correct trade partner
+                handleNormalTrade(requesterUsername);
             }
 
         } catch (Exception e) {
             System.err.println("Error during trading: " + e.getMessage());
             currentState = MuleState.ERROR;
             updateRequestStatus("FAILED", "Trading error: " + e.getMessage());
+        }
+    }
+
+    private boolean isDropTradeRequest(MuleRequest request) {
+        // Check if the request indicates drop trade (could be in location string or separate field)
+        return request.getLocation() != null && request.getLocation().contains("DROP_TRADE");
+    }
+
+    private void handleDropTrade(String requesterUsername) {
+        System.out.println("Handling drop trade with: " + requesterUsername);
+
+        long tradeWaitStart = System.currentTimeMillis();
+        long maxWaitTime = (long) config.maxTradeWaitTime() * 60 * 1000;
+
+        // Wait for items to be dropped at location
+        System.out.println("Waiting for " + requesterUsername + " to drop items at location...");
+        updateRequestStatus("PROCESSING", "WAITING_FOR_DROP");
+
+        // Check for dropped items periodically
+        Global.sleepUntil(() -> {
+            boolean itemsFound = checkForDroppedItems();
+            boolean timeoutReached = (System.currentTimeMillis() - tradeWaitStart) > maxWaitTime;
+            return itemsFound || timeoutReached;
+        }, (int) maxWaitTime);
+
+        if (checkForDroppedItems()) {
+            System.out.println("Found dropped items, picking them up...");
+            pickupDroppedItems();
+
+            // Bank the items
+            if (bankDroppedItems()) {
+                System.out.println("Drop trade completed successfully");
+                currentState = config.logoutAfterTrade() ? MuleState.LOGGING_OUT : MuleState.WAITING;
+                updateRequestStatus("COMPLETED", "Drop trade completed");
+                currentRequest = null;
+            } else {
+                System.err.println("Failed to bank dropped items");
+                currentState = MuleState.ERROR;
+                updateRequestStatus("FAILED", "Banking failed");
+            }
+        } else {
+            System.err.println("No items were dropped within timeout");
+            currentState = MuleState.ERROR;
+            updateRequestStatus("FAILED", "No items dropped");
+        }
+    }
+
+    private void handleNormalTrade(String requesterUsername) {
+        System.out.println("Handling normal trade with: " + requesterUsername);
+
+        long tradeWaitStart = System.currentTimeMillis();
+        long maxWaitTime = (long) config.maxTradeWaitTime() * 60 * 1000;
+
+        // Wait for incoming trade request using widget detection
+        Global.sleepUntil(() -> hasIncomingTradeRequest() ||
+                   (System.currentTimeMillis() - tradeWaitStart) > maxWaitTime, (int) maxWaitTime);
+
+        if (!hasIncomingTradeRequest()) {
+            System.err.println("No trade request received within timeout");
+            currentState = MuleState.ERROR;
+            updateRequestStatus("FAILED", "Trade timeout");
+            return;
+        }
+
+        // Accept the trade if it's from the correct player
+        String tradePartner = getTradePartnerName();
+        if (tradePartner != null && tradePartner.equalsIgnoreCase(requesterUsername)) {
+            System.out.println("Accepting trade from: " + tradePartner);
+            acceptTrade();
+
+            // Wait for trade completion
+            Global.sleepUntil(() -> !isTradeWindowOpen(), 30000);
+
+            if (!isTradeWindowOpen()) {
+                System.out.println("Trade completed successfully");
+                // Bank received items/coins before finishing
+                try {
+                    if (net.runelite.client.plugins.microbot.util.bank.Rs2Bank.openBank()) {
+                        Global.sleepUntil(() -> net.runelite.client.plugins.microbot.util.bank.Rs2Bank.isOpen(), 5000);
+                        if (net.runelite.client.plugins.microbot.util.bank.Rs2Bank.isOpen()) {
+                            net.runelite.client.plugins.microbot.util.bank.Rs2Bank.depositAll();
+                            sleep(1000);
+                            System.out.println("Successfully banked received items/coins after trade");
+                        }
+                    } else {
+                        System.err.println("Failed to open bank after trade; continuing anyway");
+                    }
+                } catch (Exception be) {
+                    System.err.println("Error while banking after trade: " + be.getMessage());
+                }
+                currentState = config.logoutAfterTrade() ? MuleState.LOGGING_OUT : MuleState.WAITING;
+                updateRequestStatus("COMPLETED", "Trade completed");
+                currentRequest = null;
+            } else {
+                System.err.println("Trade did not complete properly");
+                currentState = MuleState.ERROR;
+                updateRequestStatus("FAILED", "Trade incomplete");
+            }
+        } else {
+            System.err.println("Trade request from wrong player: " + tradePartner + " (expected: " + requesterUsername + ")");
+            declineTrade();
+            // Continue waiting for correct trade partner
+        }
+    }
+
+    private boolean checkForDroppedItems() {
+        // Check for ground items near the player's location
+        try {
+            WorldPoint playerPos = Rs2Player.getWorldLocation();
+            if (playerPos == null) return false;
+
+            // Check for valuable ground items (GP, items) within a small radius
+            return net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem.exists(995, 3) || // GP within 3 tiles
+                   net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem.getGroundItems()
+                           .values().stream().anyMatch(item ->
+                               item != null &&
+                               item.getLocation().distanceTo(playerPos) <= 3 &&
+                               isValuableItem(item.getId()));
+        } catch (Exception e) {
+            System.err.println("Error checking for dropped items: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void pickupDroppedItems() {
+        try {
+            WorldPoint playerPos = Rs2Player.getWorldLocation();
+            if (playerPos == null) return;
+
+            // Pick up GP first
+            if (net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem.exists(995, 3)) {
+                System.out.println("Picking up dropped GP...");
+                net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem.interact(995, "Take", 3);
+                sleep(1000);
+            }
+
+            // Pick up other valuable items
+            net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem.getGroundItems()
+                    .values().stream()
+                    .filter(item -> item != null &&
+                                  item.getLocation().distanceTo(playerPos) <= 3 &&
+                                  item.getId() != 995 && // Skip GP (already picked up)
+                                  isValuableItem(item.getId()))
+                    .forEach(item -> {
+                        try {
+                            System.out.println("Picking up: " + item.getName());
+                            net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem.interact(item.getId(), "Take", 3);
+                            sleep(600);
+                        } catch (Exception e) {
+                            System.err.println("Error picking up item: " + e.getMessage());
+                        }
+                    });
+
+        } catch (Exception e) {
+            System.err.println("Error during pickup: " + e.getMessage());
+        }
+    }
+
+    private boolean bankDroppedItems() {
+        try {
+            System.out.println("Banking picked up items...");
+
+            // Walk to nearest bank if not already there
+            WorldPoint bankLocation = getNearestBankLocation();
+            if (bankLocation != null) {
+                Rs2Walker.walkTo(bankLocation);
+                Global.sleepUntil(() -> Rs2Player.getWorldLocation().distanceTo(bankLocation) <= 3, 30000);
+            }
+
+            // Open bank and deposit all
+            if (net.runelite.client.plugins.microbot.util.bank.Rs2Bank.openBank()) {
+                Global.sleepUntil(() -> net.runelite.client.plugins.microbot.util.bank.Rs2Bank.isOpen(), 5000);
+
+                if (net.runelite.client.plugins.microbot.util.bank.Rs2Bank.isOpen()) {
+                    net.runelite.client.plugins.microbot.util.bank.Rs2Bank.depositAll();
+                    sleep(1000);
+                    System.out.println("Successfully banked all items");
+                    return true;
+                }
+            }
+
+            System.err.println("Failed to open bank or deposit items");
+            return false;
+
+        } catch (Exception e) {
+            System.err.println("Error banking items: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private WorldPoint getNearestBankLocation() {
+        WorldPoint playerPos = Rs2Player.getWorldLocation();
+        if (playerPos == null) return null;
+
+        // Return bank location based on current area
+        // Grand Exchange area
+        if (playerPos.getX() >= 3140 && playerPos.getX() <= 3190 &&
+            playerPos.getY() >= 3460 && playerPos.getY() <= 3510) {
+            return new WorldPoint(3161, 3489, 0); // GE bank
+        }
+
+        // Varrock area
+        if (playerPos.getX() >= 3170 && playerPos.getX() <= 3200 &&
+            playerPos.getY() >= 3420 && playerPos.getY() <= 3450) {
+            return new WorldPoint(3185, 3436, 0); // Varrock West Bank
+        }
+
+        // Default to GE bank
+        return new WorldPoint(3161, 3489, 0);
+    }
+
+    private boolean isValuableItem(int itemId) {
+        // Consider coins and other valuable items
+        if (itemId == 995) return true; // Coins
+
+        // Add other valuable items that might be dropped
+        int[] valuableItems = {
+            // Ores
+            440, 441, 442, 443, 444, 447, 449, 451, 453,
+            // Bars
+            2349, 2351, 2353, 2355, 2357, 2359, 2361, 2363,
+            // Fish
+            317, 319, 321, 323, 325, 327, 329, 331, 333, 335, 337, 339, 341, 343, 345, 347, 349, 351, 353, 355, 357, 359, 361, 363, 365, 367, 369, 371, 373, 375, 377, 379, 381, 383, 385, 387, 389, 391, 393, 395,
+            // Gems
+            1623, 1621, 1619, 1617, 1631, 1629, 1627, 1625
+        };
+
+        for (int valuable : valuableItems) {
+            if (itemId == valuable) return true;
+        }
+
+        return false;
+    }
+
+    @Override
+    public void shutdown() {
+        super.shutdown();
+        if (currentRequest != null) {
+            updateRequestStatus("FAILED", "Script shutdown");
+        }
+        System.out.println("Mule script shutdown");
+    }
+
+    // Getters for overlay
+    public MuleState getCurrentState() {
+        return currentState;
+    }
+
+    public MuleRequest getCurrentRequest() {
+        return currentRequest;
+    }
+
+    public long getRequestStartTime() {
+        return requestStartTime;
+    }
+
+    // Trade-related helper methods using widget detection
+    private boolean hasIncomingTradeRequest() {
+        // Check for trade request interface
+        Widget tradeRequestWidget = Rs2Widget.getWidget(219, 0); // Trade request interface
+        return tradeRequestWidget != null && !tradeRequestWidget.isHidden();
+    }
+
+    private String getTradePartnerName() {
+        try {
+            Widget tradeRequestWidget = Rs2Widget.getWidget(219, 1); // Trade request text widget
+            if (tradeRequestWidget != null && tradeRequestWidget.getText() != null) {
+                String text = tradeRequestWidget.getText();
+                // Extract username from "wishes to trade with you" message
+                if (text.contains("wishes to trade with you")) {
+                    return text.split(" ")[0]; // Get first word (username)
+                }
+            }
+        } catch (Exception e) {
+            // Silent catch
+        }
+        return null;
+    }
+
+    private void acceptTrade() {
+        try {
+            Widget acceptButton = Rs2Widget.getWidget(219, 3); // Accept button
+            if (acceptButton != null) {
+                Rs2Widget.clickWidget(acceptButton);
+            }
+        } catch (Exception e) {
+            System.err.println("Error accepting trade: " + e.getMessage());
+        }
+    }
+
+    private void declineTrade() {
+        try {
+            Widget declineButton = Rs2Widget.getWidget(219, 4); // Decline button
+            if (declineButton != null) {
+                Rs2Widget.clickWidget(declineButton);
+            }
+        } catch (Exception e) {
+            System.err.println("Error declining trade: " + e.getMessage());
+        }
+    }
+
+    private boolean isTradeWindowOpen() {
+        // Check if trade window is open
+        Widget tradeWindow = Rs2Widget.getWidget(335, 0); // Trade interface
+        return tradeWindow != null && !tradeWindow.isHidden();
+    }
+
+    private void updateRequestStatus(String status, String currentStep) {
+        if (currentRequest == null) return;
+
+        try {
+            String requestBody = String.format(
+                "{\"status\":\"%s\",\"currentStep\":\"%s\"}",
+                status, currentStep
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(config.bridgeUrl() + "/api/mule/request/" + currentRequest.getId() + "/status"))
+                    .PUT(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .build();
+
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+
+        } catch (Exception e) {
+            // Silent debug
+            log.debug("Failed to update request status: ", e);
         }
     }
 
@@ -350,23 +633,6 @@ public class MuleScript extends Script {
                         }
                     } catch (Exception e) {
                         log.error("Error parsing request manually: ", e);
-                        // Fallback to Jackson parsing
-                        try {
-                            JsonNode jsonNode = objectMapper.readTree(responseBody);
-                            currentRequest = objectMapper.treeToValue(jsonNode, MuleRequest.class);
-                            requestStartTime = System.currentTimeMillis();
-                            log.info("Fallback parsing successful: {}", currentRequest.getId());
-
-                            if (Microbot.isLoggedIn()) {
-                                currentState = MuleState.WALKING;
-                                updateRequestStatus("PROCESSING", "WALKING");
-                            } else {
-                                currentState = MuleState.LOGGING_IN;
-                                updateRequestStatus("PROCESSING", "LOGIN");
-                            }
-                        } catch (Exception fallbackError) {
-                            log.error("Both manual and Jackson parsing failed: ", fallbackError);
-                        }
                     }
                 } else if (responseBody.contains("No pending requests")) {
                     log.info("No pending requests found in response");
@@ -491,103 +757,6 @@ public class MuleScript extends Script {
             default:
                 System.err.println("Unknown location name: " + locationName);
                 return null;
-        }
-    }
-
-    @Override
-    public void shutdown() {
-        super.shutdown();
-        if (currentRequest != null) {
-            updateRequestStatus("FAILED", "Script shutdown");
-        }
-        System.out.println("Mule script shutdown");
-    }
-
-    // Getters for overlay
-    public MuleState getCurrentState() {
-        return currentState;
-    }
-
-    public MuleRequest getCurrentRequest() {
-        return currentRequest;
-    }
-
-    public long getRequestStartTime() {
-        return requestStartTime;
-    }
-
-    // Trade-related helper methods using widget detection
-    private boolean hasIncomingTradeRequest() {
-        // Check for trade request interface
-        Widget tradeRequestWidget = Rs2Widget.getWidget(219, 0); // Trade request interface
-        return tradeRequestWidget != null && !tradeRequestWidget.isHidden();
-    }
-
-    private String getTradePartnerName() {
-        try {
-            Widget tradeRequestWidget = Rs2Widget.getWidget(219, 1); // Trade request text widget
-            if (tradeRequestWidget != null && tradeRequestWidget.getText() != null) {
-                String text = tradeRequestWidget.getText();
-                // Extract username from "wishes to trade with you" message
-                if (text.contains("wishes to trade with you")) {
-                    return text.split(" ")[0]; // Get first word (username)
-                }
-            }
-        } catch (Exception e) {
-            // Silent catch
-        }
-        return null;
-    }
-
-    private void acceptTrade() {
-        try {
-            Widget acceptButton = Rs2Widget.getWidget(219, 3); // Accept button
-            if (acceptButton != null) {
-                Rs2Widget.clickWidget(acceptButton);
-            }
-        } catch (Exception e) {
-            System.err.println("Error accepting trade: " + e.getMessage());
-        }
-    }
-
-    private void declineTrade() {
-        try {
-            Widget declineButton = Rs2Widget.getWidget(219, 4); // Decline button
-            if (declineButton != null) {
-                Rs2Widget.clickWidget(declineButton);
-            }
-        } catch (Exception e) {
-            System.err.println("Error declining trade: " + e.getMessage());
-        }
-    }
-
-    private boolean isTradeWindowOpen() {
-        // Check if trade window is open
-        Widget tradeWindow = Rs2Widget.getWidget(335, 0); // Trade interface
-        return tradeWindow != null && !tradeWindow.isHidden();
-    }
-
-    private void updateRequestStatus(String status, String currentStep) {
-        if (currentRequest == null) return;
-
-        try {
-            String requestBody = String.format(
-                "{\"status\":\"%s\",\"currentStep\":\"%s\"}",
-                status, currentStep
-            );
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(config.bridgeUrl() + "/api/mule/request/" + currentRequest.getId() + "/status"))
-                    .PUT(HttpRequest.BodyPublishers.ofString(requestBody))
-                    .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(5))
-                    .build();
-
-            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
-
-        } catch (Exception e) {
-            // Silent debug
-            log.debug("Failed to update request status: ", e);
         }
     }
 }

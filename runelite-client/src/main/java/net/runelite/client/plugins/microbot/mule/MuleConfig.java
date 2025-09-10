@@ -88,6 +88,43 @@ public interface MuleConfig extends Config {
         return true;
     }
 
+    // World Selection Configuration
+    @ConfigItem(
+            keyName = "isMember",
+            name = "Is Member Account",
+            description = "Use member worlds for login"
+    )
+    default boolean isMember() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "world",
+            name = "Specific World",
+            description = "Specific world number to use (ignored if random world is enabled)"
+    )
+    default int world() {
+        return 360;
+    }
+
+    @ConfigItem(
+            keyName = "useRandomWorld",
+            name = "Use Random World",
+            description = "Use random world selection instead of specific world"
+    )
+    default boolean useRandomWorld() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "autoLogin",
+            name = "Auto Login",
+            description = "Automatically login when disconnected"
+    )
+    default boolean autoLogin() {
+        return true;
+    }
+
     // Helper method to get default location as WorldPoint
     default String getDefaultLocationString() {
         return defaultLocationX() + "," + defaultLocationY() + "," + defaultLocationZ();

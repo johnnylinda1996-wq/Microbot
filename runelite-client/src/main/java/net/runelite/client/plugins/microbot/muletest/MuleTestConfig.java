@@ -5,8 +5,10 @@ import net.runelite.client.config.*;
 @ConfigGroup(MuleTestConfig.configGroup)
 @ConfigInformation(
         "<html>" +
-                "<p>This script automatically requests a mule when you reach a certain amount of GP.</p>" +
-                "<p>Configure the GP threshold and mule location below.</p>" +
+                "<p>This script automatically requests a mule on a time interval.</p>" +
+                "<p>Trading is disabled; this script uses DROP TRADE only.</p>" +
+                "<p>It pauses other running bots during the mule process and resumes them after completion.</p>" +
+                "<p>Configure the time interval and mule location below.</p>" +
                 "<p>Make sure the Mule Bridge is running on localhost:8080</p>" +
                 "</html>")
 public interface MuleTestConfig extends Config {
@@ -27,27 +29,14 @@ public interface MuleTestConfig extends Config {
     String muleSection = "mule";
 
     @ConfigItem(
-            keyName = "gpThreshold",
-            name = "GP Threshold",
-            description = "Amount of GP to trigger mule request",
+            keyName = "muleIntervalHours",
+            name = "Mule Interval (Hours)",
+            description = "How many hours between mule requests (e.g., 2.5 for 2.5 hours)",
             section = generalSection,
             position = 0
     )
-    @Range(min = 10000, max = 10000000)
-    default int gpThreshold() {
-        return 100000;
-    }
-
-    @ConfigItem(
-            keyName = "checkInterval",
-            name = "Check Interval (seconds)",
-            description = "How often to check GP amount",
-            section = generalSection,
-            position = 1
-    )
-    @Range(min = 5, max = 300)
-    default int checkInterval() {
-        return 10;
+    default double muleIntervalHours() {
+        return 2.0;
     }
 
     @ConfigItem(
@@ -86,7 +75,7 @@ public interface MuleTestConfig extends Config {
     @ConfigItem(
             keyName = "autoWalkToMule",
             name = "Auto Walk to Mule",
-            description = "Automatically walk to mule location when threshold is reached",
+            description = "Automatically walk to mule location when the time interval is reached",
             section = muleSection,
             position = 3
     )
@@ -103,6 +92,84 @@ public interface MuleTestConfig extends Config {
     )
     default boolean stopAfterMule() {
         return false;
+    }
+
+    // World Selection Configuration
+    @ConfigItem(
+            keyName = "isMember",
+            name = "Is Member Account",
+            description = "Use member worlds for login",
+            section = muleSection,
+            position = 5
+    )
+    default boolean isMember() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "world",
+            name = "Specific World",
+            description = "Specific world number to use (ignored if random world is enabled)",
+            section = muleSection,
+            position = 6
+    )
+    default int world() {
+        return 360;
+    }
+
+    @ConfigItem(
+            keyName = "useRandomWorld",
+            name = "Use Random World",
+            description = "Use random world selection instead of specific world",
+            section = muleSection,
+            position = 7
+    )
+    default boolean useRandomWorld() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "autoLogin",
+            name = "Auto Login",
+            description = "Automatically login when disconnected",
+            section = muleSection,
+            position = 8
+    )
+    default boolean autoLogin() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "sellItemsFirst",
+            name = "Sell Items Before Mule",
+            description = "Sell inventory items at GE before requesting mule (future feature)",
+            section = muleSection,
+            position = 9
+    )
+    default boolean sellItemsFirst() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sellItemIds",
+            name = "Item IDs to Sell",
+            description = "Comma-separated item IDs to sell (e.g., 314,315,316 for anchovy,trout,salmon)",
+            section = muleSection,
+            position = 10
+    )
+    default String sellItemIds() {
+        return "";
+    }
+
+    @ConfigItem(
+            keyName = "sellItemNames",
+            name = "Item Names to Sell",
+            description = "Comma-separated item names to sell (alternative to IDs)",
+            section = muleSection,
+            position = 11
+    )
+    default String sellItemNames() {
+        return "";
     }
 
     enum MuleLocation {

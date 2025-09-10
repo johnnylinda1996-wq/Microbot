@@ -29,8 +29,6 @@ public class MuleTestOverlay extends OverlayPanel {
     @Override
     public Dimension render(Graphics2D graphics) {
         try {
-            if (!Microbot.isLoggedIn()) return null;
-
             panelComponent.getChildren().clear();
 
             // Title
@@ -41,18 +39,16 @@ public class MuleTestOverlay extends OverlayPanel {
 
             // Current GP
             int currentGp = Rs2Inventory.count(995);
-            Color gpColor = currentGp >= config.gpThreshold() ? Color.RED : Color.WHITE;
 
             panelComponent.getChildren().add(LineComponent.builder()
                     .left("Current GP:")
                     .right(String.format("%,d", currentGp))
-                    .rightColor(gpColor)
                     .build());
 
-            // GP Threshold
+            // Interval (hours)
             panelComponent.getChildren().add(LineComponent.builder()
-                    .left("Threshold:")
-                    .right(String.format("%,d", config.gpThreshold()))
+                    .left("Interval:")
+                    .right(config.muleIntervalHours() + " h")
                     .build());
 
             // Mule Location
@@ -74,11 +70,8 @@ public class MuleTestOverlay extends OverlayPanel {
             if (!script.isRunning()) {
                 status = "Stopped";
                 statusColor = Color.RED;
-            } else if (currentGp >= config.gpThreshold()) {
-                status = "READY FOR MULE!";
-                statusColor = Color.ORANGE;
             } else {
-                status = "Monitoring...";
+                status = "Running (time-interval)";
                 statusColor = Color.GREEN;
             }
 
@@ -86,14 +79,6 @@ public class MuleTestOverlay extends OverlayPanel {
                     .left("Status:")
                     .right(status)
                     .rightColor(statusColor)
-                    .build());
-
-            // Progress bar visual
-            int progressPercentage = Math.min(100, (currentGp * 100) / config.gpThreshold());
-            panelComponent.getChildren().add(LineComponent.builder()
-                    .left("Progress:")
-                    .right(progressPercentage + "%")
-                    .rightColor(progressPercentage >= 100 ? Color.RED : Color.YELLOW)
                     .build());
 
             // Bridge connection status
