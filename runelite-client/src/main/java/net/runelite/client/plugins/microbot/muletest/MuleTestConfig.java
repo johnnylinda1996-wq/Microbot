@@ -94,49 +94,15 @@ public interface MuleTestConfig extends Config {
         return false;
     }
 
-    // World Selection Configuration
-    @ConfigItem(
-            keyName = "isMember",
-            name = "Is Member Account",
-            description = "Use member worlds for login",
-            section = muleSection,
-            position = 5
-    )
-    default boolean isMember() {
-        return false;
-    }
-
     @ConfigItem(
             keyName = "world",
             name = "Specific World",
-            description = "Specific world number to use (ignored if random world is enabled)",
+            description = "Specific world number to use",
             section = muleSection,
-            position = 6
+            position = 5
     )
     default int world() {
         return 360;
-    }
-
-    @ConfigItem(
-            keyName = "useRandomWorld",
-            name = "Use Random World",
-            description = "Use random world selection instead of specific world",
-            section = muleSection,
-            position = 7
-    )
-    default boolean useRandomWorld() {
-        return false;
-    }
-
-    @ConfigItem(
-            keyName = "autoLogin",
-            name = "Auto Login",
-            description = "Automatically login when disconnected",
-            section = muleSection,
-            position = 8
-    )
-    default boolean autoLogin() {
-        return true;
     }
 
     @ConfigItem(
@@ -144,7 +110,7 @@ public interface MuleTestConfig extends Config {
             name = "Sell Items Before Mule",
             description = "Sell inventory items at GE before requesting mule (future feature)",
             section = muleSection,
-            position = 9
+            position = 6
     )
     default boolean sellItemsFirst() {
         return false;
@@ -155,7 +121,7 @@ public interface MuleTestConfig extends Config {
             name = "Item IDs to Sell",
             description = "Comma-separated item IDs to sell (e.g., 314,315,316 for anchovy,trout,salmon)",
             section = muleSection,
-            position = 10
+            position = 7
     )
     default String sellItemIds() {
         return "";
@@ -166,7 +132,7 @@ public interface MuleTestConfig extends Config {
             name = "Item Names to Sell",
             description = "Comma-separated item names to sell (alternative to IDs)",
             section = muleSection,
-            position = 11
+            position = 8
     )
     default String sellItemNames() {
         return "";

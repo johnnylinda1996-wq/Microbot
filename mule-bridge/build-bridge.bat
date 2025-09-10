@@ -12,12 +12,17 @@ echo Building JAR file (skipping tests)...
 mvn package -DskipTests
 
 echo.
-if exist "target\MuleBridge.jar" (
+rem Find built jar (Spring Boot default: mule-bridge-<version>.jar)
+set "JAR="
+for %%f in ("target\mule-bridge-*.jar") do (
+    set "JAR=%%f"
+)
+if defined JAR (
     echo ================================
     echo ✓ SUCCESS! JAR file created:
-    echo   Location: target\MuleBridge.jar
+    echo   Location: %JAR%
     echo   Size:
-    dir target\MuleBridge.jar | find "MuleBridge.jar"
+    dir "%JAR%" | find "mule-bridge"
     echo ================================
     echo.
     echo You can now start the bridge with:
@@ -29,9 +34,10 @@ if exist "target\MuleBridge.jar" (
     echo ================================
     echo ✗ ERROR: JAR file not created!
     echo Check the build output above for errors
+    echo (Tip: ensure Java 11+ and Maven are installed and on PATH)
     echo ================================
 )
 
 echo.
 echo Press any key to close...
-pause >nul
+pause 

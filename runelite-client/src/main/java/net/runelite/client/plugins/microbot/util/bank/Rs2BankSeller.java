@@ -44,7 +44,7 @@ public class Rs2BankSeller {
         try {
             log.info("Starting to sell {} item types", itemIds.length);
 
-            // Go to Grand Exchange if not already there
+            // Go to Grand Exchange area first (there is a bank nearby)
             if (!isAtGrandExchange()) {
                 log.info("Walking to Grand Exchange...");
                 Rs2Walker.walkTo(GRAND_EXCHANGE);
@@ -55,11 +55,36 @@ public class Rs2BankSeller {
                 }
             }
 
+            // Determine if inventory already contains any item to sell
+            boolean haveAnyInInventory = Arrays.stream(itemIds).anyMatch(Rs2Inventory::hasItem);
+
             // Open bank to withdraw items if needed
             log.info("Opening bank to withdraw items to sell");
             if (!Rs2Bank.openBank()) {
-                log.warn("Could not open bank at GE. Continuing if items are already in inventory");
+                log.warn("Could not open bank at GE.");
+                if (!haveAnyInInventory) {
+                    log.error("No items to sell in inventory and bank could not be opened. Aborting sell process.");
+                    return false;
+                } else {
+                    log.info("Proceeding with items already in inventory (no bank access).");
+                }
             } else {
+                // Ensure clean inventory and withdraw as noted
+                try {
+                    log.info("Depositing all inventory items first");
+                    Rs2Bank.depositAll();
+                    Global.sleep(300, 600);
+
+                    // Toggle withdraw mode to Note (click the 'Note' button in bank)
+                    log.info("Setting bank withdraw mode to Note");
+                    // Clicking the 'Note' toggle; if already noted, this is a no-op
+                    net.runelite.client.plugins.microbot.util.widget.Rs2Widget.clickWidget("Note", true);
+                    Global.sleep(250, 450);
+                } catch (Exception e) {
+                    log.warn("Error preparing bank state (deposit all / note mode): {}", e.getMessage());
+                }
+
+                // We have the bank open; withdraw items that are not already in inventory
                 for (int itemId : itemIds) {
                     try {
                         if (!Rs2Inventory.hasItem(itemId) && Rs2Bank.hasItem(itemId)) {
@@ -74,6 +99,13 @@ public class Rs2BankSeller {
                 // Close bank before opening GE
                 Rs2Bank.closeBank();
                 Global.sleep(300, 600);
+            }
+
+            // Re-evaluate inventory after bank step
+            boolean hasSomethingToSell = Arrays.stream(itemIds).anyMatch(Rs2Inventory::hasItem);
+            if (!hasSomethingToSell) {
+                log.warn("After banking, none of the requested items are present in inventory. Skipping GE sell.");
+                return false;
             }
 
             // Open Grand Exchange
@@ -138,7 +170,7 @@ public class Rs2BankSeller {
      */
     private static boolean openGrandExchange() {
         try {
-            // Try to interact with Grand Exchange clerk or booth
+            // Try to interact with Grand Exchange booth first
             if (Rs2GameObject.interact("Grand Exchange booth", "Exchange")) {
                 return Global.sleepUntil(() -> isGrandExchangeOpen(), 5000);
             }
@@ -183,7 +215,8 @@ public class Rs2BankSeller {
             }
 
             // Click item in inventory to select it
-            if (!Rs2Inventory.interact(itemId, "Sell")) {
+            // GE expects the inventory context action "Offer" for selling
+            if (!Rs2Inventory.interact(itemId, "Offer")) {
                 log.warn("Failed to select item for selling: {}", itemId);
                 return false;
             }
@@ -219,7 +252,8 @@ public class Rs2BankSeller {
         // Check each of the 8 GE slots (typically widgets 7-14)
         for (int i = 7; i <= 14; i++) {
             Widget slot = Rs2Widget.getWidget(GE_INTERFACE_PARENT, i);
-            if (slot != null && slot.getText() == null || slot.getText().isEmpty()) {
+            // Guard against NPE and ensure proper precedence
+            if (slot != null && (slot.getText() == null || slot.getText().isEmpty())) {
                 return i;
             }
         }

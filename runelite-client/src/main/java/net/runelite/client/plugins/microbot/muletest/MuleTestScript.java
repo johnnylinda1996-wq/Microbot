@@ -1,7 +1,6 @@
 package net.runelite.client.plugins.microbot.muletest;
 
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.GameState;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
@@ -9,7 +8,6 @@ import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
 import net.runelite.client.plugins.microbot.util.mule.MuleBridgeClient;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
-import net.runelite.client.plugins.microbot.util.security.Login;
 import net.runelite.client.plugins.microbot.util.Global;
 import net.runelite.client.plugins.microbot.util.bank.Rs2BankSeller;
 import net.runelite.client.plugins.microbot.util.botmanager.Rs2BotManager;
@@ -25,7 +23,6 @@ public class MuleTestScript extends Script {
     public static String version = "1.0.0";
     private MuleTestConfig config;
     private boolean muleRequested = false;
-    private boolean autoLoginEnabled = false;
     private List<String> pausedBots = new ArrayList<>();
     private boolean itemsSold = false;
     private long scriptStartTime = 0;
@@ -34,27 +31,19 @@ public class MuleTestScript extends Script {
 
     public boolean run(MuleTestConfig config) {
         this.config = config;
-        this.autoLoginEnabled = config.autoLogin();
         this.scriptStartTime = System.currentTimeMillis();
         this.lastMuleTime = System.currentTimeMillis();
 
         // Pure time-interval mode
-        log.info("MuleTest script started (DROP-TRADE ONLY) with TIME INTERVAL: {} hours (Member: {})",
-                config.muleIntervalHours(),
-                config.isMember());
+        log.info("MuleTest script started (DROP-TRADE ONLY) with TIME INTERVAL: {} hours",
+                config.muleIntervalHours());
 
         // Register this script with the bot manager
         Rs2BotManager.registerScript("MuleTest", this);
 
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
-                // Handle auto-login if enabled and not logged in
-                if (autoLoginEnabled && !Microbot.isLoggedIn() &&
-                    Microbot.getClient().getGameState() == GameState.LOGIN_SCREEN) {
-                    handleAutoLogin();
-                }
-
-                if (!Microbot.isLoggedIn() || Microbot.getClient().getGameState() != GameState.LOGGED_IN) {
+                if (!Microbot.isLoggedIn() || Microbot.getClient().getGameState() != net.runelite.api.GameState.LOGGED_IN) {
                     return;
                 }
 
@@ -68,37 +57,6 @@ public class MuleTestScript extends Script {
             }
         }, 0, 1000, TimeUnit.MILLISECONDS);
         return true;
-    }
-
-    private void handleAutoLogin() {
-        try {
-            log.info("Attempting auto-login...");
-
-            // Use the world selection logic from config
-            int targetWorld;
-            if (config.useRandomWorld()) {
-                targetWorld = Login.getRandomWorld(config.isMember());
-                log.info("Using random world: {}", targetWorld);
-            } else {
-                targetWorld = config.world();
-                log.info("Using specific world: {}", targetWorld);
-            }
-
-            // Use the proper Login constructor with world selection
-            new Login(targetWorld);
-
-            // Wait for login to complete with timeout
-            boolean loginSuccessful = Global.sleepUntil(Microbot::isLoggedIn, 30000);
-
-            if (loginSuccessful && Microbot.isLoggedIn()) {
-                log.info("Successfully logged in automatically to world " + targetWorld);
-            } else {
-                log.error("Auto-login failed after timeout");
-            }
-
-        } catch (Exception e) {
-            log.error("Error during auto-login: " + e.getMessage());
-        }
     }
 
     /**
