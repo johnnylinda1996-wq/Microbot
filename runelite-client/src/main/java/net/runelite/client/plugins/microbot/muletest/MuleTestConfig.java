@@ -60,8 +60,8 @@ public interface MuleTestConfig extends Config {
 
     @ConfigItem(
             keyName = "muleTimerLocation",
-            name = "Mule Timer Location",
-            description = "Location where bot goes when mule timer expires (X,Y,Z)",
+            name = "Banking/Selling Location",
+            description = "Location where bot goes for banking and selling when mule timer expires (X,Y,Z)",
             section = generalSection,
             position = 2
     )
@@ -77,7 +77,7 @@ public interface MuleTestConfig extends Config {
             position = 3
     )
     default int dropLocationX() {
-        return 3164; // Grand Exchange X by default
+        return 3189; // Slightly different from GE for drop trade
     }
 
     @ConfigItem(
@@ -88,7 +88,7 @@ public interface MuleTestConfig extends Config {
             position = 4
     )
     default int dropLocationY() {
-        return 3486; // Grand Exchange Y by default
+        return 3410; // Different location for drop trade
     }
 
     @ConfigItem(
@@ -99,7 +99,7 @@ public interface MuleTestConfig extends Config {
             position = 5
     )
     default int dropLocationZ() {
-        return 0; // Ground level by default
+        return 1; // Upstairs for drop trade
     }
 
     @ConfigItem(
@@ -158,22 +158,11 @@ public interface MuleTestConfig extends Config {
     }
 
     @ConfigItem(
-            keyName = "muleLocation",
-            name = "Mule Location",
-            description = "Where to meet the mule",
-            section = muleSection,
-            position = 0
-    )
-    default MuleLocation muleLocation() {
-        return MuleLocation.GRAND_EXCHANGE;
-    }
-
-    @ConfigItem(
             keyName = "muleAccount",
             name = "Mule Account Name",
             description = "Username of the mule account",
             section = muleSection,
-            position = 1
+            position = 0
     )
     default String muleAccount() {
         return "MuleBot1";
@@ -184,7 +173,7 @@ public interface MuleTestConfig extends Config {
             name = "Bridge URL",
             description = "URL of the mule bridge server",
             section = muleSection,
-            position = 2
+            position = 1
     )
     default String bridgeUrl() {
         return "http://localhost:8080";
@@ -192,10 +181,10 @@ public interface MuleTestConfig extends Config {
 
     @ConfigItem(
             keyName = "autoWalkToMule",
-            name = "Auto Walk to Mule",
-            description = "Automatically walk to mule location when the time interval is reached",
+            name = "Auto Walk to Drop Location",
+            description = "Automatically walk to drop location when the time interval is reached",
             section = muleSection,
-            position = 3
+            position = 2
     )
     default boolean autoWalkToMule() {
         return true;
@@ -206,7 +195,7 @@ public interface MuleTestConfig extends Config {
             name = "Stop After Mule",
             description = "Stop the script after successful mule trade",
             section = muleSection,
-            position = 4
+            position = 3
     )
     default boolean stopAfterMule() {
         return false;
@@ -217,43 +206,10 @@ public interface MuleTestConfig extends Config {
             name = "Specific World",
             description = "Specific world number to use",
             section = muleSection,
-            position = 5
+            position = 4
     )
     default int world() {
         return 360;
-    }
-
-    enum MuleLocation {
-        GRAND_EXCHANGE("Grand Exchange", new int[]{3164, 3486, 0}),
-        VARROCK_WEST_BANK("Varrock West Bank", new int[]{3185, 3436, 0}),
-        LUMBRIDGE("Lumbridge", new int[]{3222, 3218, 0}),
-        FALADOR("Falador", new int[]{2965, 3378, 0}),
-        EDGEVILLE("Edgeville", new int[]{3094, 3493, 0});
-
-        private final String displayName;
-        private final int[] coordinates;
-
-        MuleLocation(String displayName, int[] coordinates) {
-            this.displayName = displayName;
-            this.coordinates = coordinates;
-        }
-
-        public String getDisplayName() {
-            return displayName;
-        }
-
-        public WorldPoint getWorldPoint() {
-            return new WorldPoint(coordinates[0], coordinates[1], coordinates[2]);
-        }
-
-        public String getCoordinateString() {
-            return coordinates[0] + "," + coordinates[1] + "," + coordinates[2];
-        }
-
-        @Override
-        public String toString() {
-            return displayName;
-        }
     }
 
     // Helper method to parse return location
@@ -270,23 +226,18 @@ public interface MuleTestConfig extends Config {
         }
     }
 
-    // Helper method to parse mule timer location
-    default WorldPoint getMuleTimerWorldPoint() {
-        try {
-            String[] parts = muleTimerLocation().split(",");
-            return new WorldPoint(
-                    Integer.parseInt(parts[0].trim()),
-                    Integer.parseInt(parts[1].trim()),
-                    Integer.parseInt(parts[2].trim())
-            );
-        } catch (Exception e) {
-            return new WorldPoint(3164, 3486, 0); // Default to GE
-        }
+    // Helper method to get Grand Exchange location (fixed - only place to sell items)
+    default WorldPoint getGrandExchangeWorldPoint() {
+        return new WorldPoint(3164, 3486, 0); // Grand Exchange
     }
 
-    // Helper method to get drop location as WorldPoint
+    // Helper method to get drop location as WorldPoint - Fixed to use individual coords
     default WorldPoint getDropLocationWorldPoint() {
-        return new WorldPoint(dropLocationX(), dropLocationY(), dropLocationZ());
+        try {
+            return new WorldPoint(dropLocationX(), dropLocationY(), dropLocationZ());
+        } catch (Exception e) {
+            return new WorldPoint(3189, 3410, 1); // Default to drop location
+        }
     }
 
     // Helper method to get drop location as coordinate string

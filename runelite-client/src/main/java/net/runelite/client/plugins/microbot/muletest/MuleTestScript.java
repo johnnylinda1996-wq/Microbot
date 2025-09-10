@@ -50,6 +50,13 @@ public class MuleTestScript extends Script {
         COMPLETED
     }
 
+    /**
+     * Fixed Grand Exchange location used for walking and interactions.
+     */
+    private WorldPoint getGrandExchangeLocation() {
+        return new WorldPoint(3164, 3486, 0);
+    }
+
     private MuleProcessState currentState = MuleProcessState.WAITING;
 
     public boolean run(MuleTestConfig config) {
@@ -69,7 +76,8 @@ public class MuleTestScript extends Script {
 
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
-                if (!Microbot.isLoggedIn() || Microbot.getClient().getGameState() != net.runelite.api.GameState.LOGGED_IN) {
+                // Less frequent login checks to prevent timeout spam - only check every 5 seconds
+                if (!isClientReady()) {
                     return;
                 }
 
@@ -81,7 +89,7 @@ public class MuleTestScript extends Script {
             } catch (Exception ex) {
                 log.error("Error in mule test script: ", ex);
             }
-        }, 0, 1000, TimeUnit.MILLISECONDS);
+        }, 0, 5000, TimeUnit.MILLISECONDS); // Changed from 1000ms to 5000ms (5 seconds)
         return true;
     }
 
@@ -152,33 +160,72 @@ public class MuleTestScript extends Script {
         try {
             log.info("🏪 Starting comprehensive banking and selling process...");
 
-            // Step 1: Go to Mule Timer Location (where bot should go when timer expires)
-            WorldPoint muleTimerLocation = config.getMuleTimerWorldPoint();
-            if (!Rs2Player.getWorldLocation().equals(muleTimerLocation)) {
-                log.info("🚶 Walking to mule timer location: {}...", muleTimerLocation);
-                Rs2Walker.walkTo(muleTimerLocation);
+            // Step 1: Ensure we're on the correct world
+            if (!ensureCorrectWorld()) {
+                log.error("❌ Failed to switch to correct world");
+                return false;
+            }
 
-                if (!Global.sleepUntil(() -> Rs2Player.getWorldLocation().distanceTo(muleTimerLocation) <= 5, 30000)) {
-                    log.error("❌ Failed to reach mule timer location");
+            // Step 2: Go to Grand Exchange (fixed location - only place to sell items)
+            WorldPoint grandExchangeLocation = getGrandExchangeLocation();
+
+            if (!Rs2Player.getWorldLocation().equals(grandExchangeLocation)) {
+                log.info("🚶 Walking to Grand Exchange: {}...", grandExchangeLocation);
+                Rs2Walker.walkTo(grandExchangeLocation);
+
+                if (!Global.sleepUntil(() -> Rs2Player.getWorldLocation().distanceTo(grandExchangeLocation) <= 5, 30000)) {
+                    log.error("❌ Failed to reach Grand Exchange");
                     return false;
                 }
             }
 
-            // Step 2: Complete banking process
-            if (!handleBankingProcess()) {
-                log.error("❌ Banking process failed");
-                return false;
+            // Step 3-5: Batch loop -> withdraw until inv full, sell, repeat until no more items in bank
+            int batch = 0;
+            while (true) {
+                batch++;
+                log.info("📦 Preparing batch #{} from bank...", batch);
+
+                if (!handleBankingProcess()) {
+                    log.error("❌ Banking process failed");
+                    return false;
+                }
+
+                // If inventory is empty after banking, nothing to sell -> break
+                if (net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isEmpty()) {
+                    log.info("✅ Geen items om te verkopen in deze batch; bank lijkt leeg voor geselecteerde items");
+                    break;
+                }
+
+                if (!handleGrandExchangeSelling()) {
+                    log.error("❌ Grand Exchange selling failed");
+                    // Ga door naar volgende iteratie poging of breek uit
+                    break;
+                }
+
+                // Als inventory leeg is na sell, kijk of bank nog items heeft; zo ja, volgende batch
+                // We bepalen dit door te proberen een mini-withdraw check te doen in de volgende loop-iteratie
+                // (handleBankingProcess() zal dan meteen niets vinden en breken)
             }
 
-            // Step 3: Sell items at Grand Exchange
-            if (!handleGrandExchangeSelling()) {
-                log.error("❌ Grand Exchange selling failed");
-                return false;
-            }
+            // Afronden: coins ophalen van GE naar bank en dan alle coins opnemen
+            try {
+                if (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.openExchange()) {
+                    net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.collectAllToBank();
+                    net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.closeExchange();
+                    net.runelite.client.plugins.microbot.util.Global.sleep(400, 800);
+                }
+            } catch (Exception ignored) {}
 
-            // Step 4: Wait for sales to complete and collect coins
-            if (!waitForSalesAndCollectCoins()) {
-                log.warn("⚠️ Warning: Issues collecting coins from sales");
+            if (net.runelite.client.plugins.microbot.util.bank.Rs2Bank.openBank()) {
+                // Deposit restanten behalve coins
+                net.runelite.client.plugins.microbot.util.bank.Rs2Bank.depositAllExcept("Coins");
+                net.runelite.client.plugins.microbot.util.Global.sleep(400, 800);
+                if (net.runelite.client.plugins.microbot.util.bank.Rs2Bank.hasItem("Coins")) {
+                    log.info("💰 Withdrawing all coins from bank");
+                    net.runelite.client.plugins.microbot.util.bank.Rs2Bank.withdrawAll("Coins");
+                    net.runelite.client.plugins.microbot.util.Global.sleep(400, 800);
+                }
+                net.runelite.client.plugins.microbot.util.bank.Rs2Bank.closeBank();
             }
 
             log.info("✅ Complete banking and selling process finished");
@@ -186,6 +233,42 @@ public class MuleTestScript extends Script {
 
         } catch (Exception e) {
             log.error("Error in banking and selling process: ", e);
+            return false;
+        }
+    }
+
+    /**
+     * Ensure we're on the correct world before starting mule process
+     */
+    private boolean ensureCorrectWorld() {
+        try {
+            int currentWorld = Microbot.getClient().getWorld();
+            int targetWorld = config.world();
+
+            if (currentWorld != targetWorld) {
+                log.info("🌍 Current world: {}, target world: {}. Switching worlds...", currentWorld, targetWorld);
+
+                // Use the Microbot world hopping utility
+                if (Microbot.hopToWorld(targetWorld)) {
+                    // Wait for world switch to complete
+                    if (Global.sleepUntil(() -> Microbot.getClient().getWorld() == targetWorld, 15000)) {
+                        log.info("✅ Successfully switched to world {}", targetWorld);
+                        return true;
+                    } else {
+                        log.error("❌ World switch timed out");
+                        return false;
+                    }
+                } else {
+                    log.error("❌ Failed to initiate world switch");
+                    return false;
+                }
+            } else {
+                log.info("✅ Already on correct world: {}", currentWorld);
+                return true;
+            }
+
+        } catch (Exception e) {
+            log.error("Error checking/switching world: ", e);
             return false;
         }
     }
@@ -248,6 +331,10 @@ public class MuleTestScript extends Script {
 
             // Withdraw by item IDs
             for (int itemId : itemIds) {
+                if (net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()) {
+                    log.info("📦 Inventory is full, stop withdrawing by IDs");
+                    break;
+                }
                 if (Rs2Bank.hasItem(itemId)) {
                     int bankQuantity = Rs2Bank.count(itemId);
                     log.info("💰 Found {} x item ID {} in bank - withdrawing all", bankQuantity, itemId);
@@ -259,7 +346,8 @@ public class MuleTestScript extends Script {
                     // Check if we need to do multiple withdrawals for large quantities
                     if (bankQuantity > 28) {  // More than one inventory
                         log.info("📦 Large quantity detected - handling multiple inventory loads");
-                        while (Rs2Bank.hasItem(itemId) && Rs2Inventory.hasItem(itemId)) {
+                        while (!net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()
+                                && Rs2Bank.hasItem(itemId) && Rs2Inventory.hasItem(itemId)) {
                             // Make space by noting what we have
                             int inventoryCount = Rs2Inventory.count(itemId);
                             totalWithdrawn += inventoryCount;
@@ -281,6 +369,10 @@ public class MuleTestScript extends Script {
 
             // Withdraw by item names (if no IDs specified or as additional)
             for (String itemName : itemNames) {
+                if (net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()) {
+                    log.info("📦 Inventory is full, stop withdrawing by names");
+                    break;
+                }
                 if (!itemName.isEmpty() && Rs2Bank.hasItem(itemName)) {
                     int bankQuantity = Rs2Bank.count(itemName);
                     log.info("💰 Found {} x '{}' in bank - withdrawing all", bankQuantity, itemName);
@@ -290,7 +382,8 @@ public class MuleTestScript extends Script {
 
                     // Handle multiple inventories for large quantities
                     if (bankQuantity > 28) {
-                        while (Rs2Bank.hasItem(itemName) && Rs2Inventory.hasItem(itemName)) {
+                        while (!net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()
+                                && Rs2Bank.hasItem(itemName) && Rs2Inventory.hasItem(itemName)) {
                             int inventoryCount = Rs2Inventory.count(itemName);
                             totalWithdrawn += inventoryCount;
                             log.info("📊 Withdrew {} '{}' so far, continuing...", inventoryCount, itemName);
@@ -327,41 +420,67 @@ public class MuleTestScript extends Script {
         try {
             log.info("🛒 Starting Grand Exchange selling process...");
 
-            // Open Grand Exchange
-            if (!openGrandExchange()) {
+            // Open Grand Exchange via utility (handles clerk/booth and pin)
+            if (!net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.openExchange()) {
                 log.error("❌ Failed to open Grand Exchange");
                 return false;
             }
+            net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                    net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange::isOpen);
 
-            // Get items to sell
-            int[] itemIds = getItemIdsToSell();
-            String[] itemNames = getItemNamesToSell();
+            // Sell alle verhandelbare items uit de inventory, -10% onder prijs
+            final java.util.List<net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel> items =
+                    net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.all(
+                            net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel::isTradeable);
+            if (items.isEmpty()) {
+                log.warn("⚠️ Geen verhandelbare items in de inventory");
+                return false;
+            }
 
-            int itemsSold = 0;
-
-            // Sell by item IDs
-            for (int itemId : itemIds) {
-                if (Rs2Inventory.hasItem(itemId)) {
-                    if (sellItemAtGE(itemId)) {
-                        itemsSold++;
+            int offersCreated = 0;
+            for (var item : items) {
+                // Wacht tot er een vrij GE-slot is; verzamel tussendoor verkopen
+                while (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlot() == null) {
+                    if (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.hasSoldOffer()) {
+                        net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.collectAllToBank();
                     }
+                    net.runelite.client.plugins.microbot.util.Global.sleepUntil(() ->
+                            net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlot() != null
+                                    || net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.hasSoldOffer());
+                }
+
+                if (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlot() == null) {
+                    break; // geen slots, breek de verkoop-loop
+                }
+
+                // Bouw -10% SELL verzoek op naam zodat noted/unnoted vanzelf werkt
+                var request = net.runelite.client.plugins.microbot.util.grandexchange.GrandExchangeRequest.builder()
+                        .action(net.runelite.client.plugins.microbot.util.grandexchange.GrandExchangeAction.SELL)
+                        .itemName(item.getName())
+                        .quantity(item.getQuantity())
+                        .percent(-10)
+                        .closeAfterCompletion(false)
+                        .build();
+
+                boolean placed = net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.processOffer(request);
+                // Terug naar overzicht, wacht tot item niet meer in inventory staat (exacte naam)
+                net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                        net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange::isOpen);
+                net.runelite.client.plugins.microbot.util.Global.sleepUntil(() ->
+                        !net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.hasItem(item.getName(), true));
+
+                if (placed) {
+                    offersCreated++;
                 }
             }
 
-            // Sell by item names if not using IDs
-            if (itemIds.length == 0) {
-                for (String itemName : itemNames) {
-                    if (!itemName.isEmpty() && Rs2Inventory.hasItem(itemName)) {
-                        int itemId = getItemIdByName(itemName);
-                        if (itemId != -1 && sellItemAtGE(itemId)) {
-                            itemsSold++;
-                        }
-                    }
-                }
-            }
+            // Sluit GE na afronden
+            net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.closeExchange();
+            net.runelite.client.plugins.microbot.util.Global.sleepUntil(() ->
+                    !net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.isOpen());
 
-            log.info("✅ Successfully created {} sell offers at Grand Exchange", itemsSold);
-            return itemsSold > 0;
+            log.info("✅ Successfully created {} sell offers at Grand Exchange", offersCreated);
+            return offersCreated > 0;
 
         } catch (Exception e) {
             log.error("Error in Grand Exchange selling: ", e);
@@ -657,16 +776,16 @@ public class MuleTestScript extends Script {
             });
 
             if (items.isEmpty()) {
-                log.warn("⚠️ No items to mule, skipping mule request");
+                log.warn("⚠️ No gold to mule, skipping mule request");
                 resetMuleProcess();
                 return;
             }
 
             log.info("📤 Requesting mule for {} item types...", items.size());
 
-            // Request mule
+            // Request mule WITHOUT sending a location (user sets location separately on mule & muletest)
             MuleBridgeClient client = MuleBridgeClient.getInstance(config.bridgeUrl());
-            String location = config.muleLocation().getCoordinateString();
+            String location = ""; // do not include location in payload
 
             CompletableFuture<String> muleRequest = client.requestMule(config.muleAccount(), location, items);
 
@@ -886,10 +1005,61 @@ public class MuleTestScript extends Script {
         return currentState;
     }
 
-    @Override
-    public void shutdown() {
-        resetMuleProcess();
-        super.shutdown();
-        log.info("MuleTest script stopped");
+    /**
+     * Check if client is ready without causing TimeoutExceptions
+     * Uses less aggressive checking to prevent client thread overload
+     */
+    private boolean isClientReady() {
+        try {
+            // First check basic client state without widget checking
+            if (Microbot.getClient() == null) {
+                return false;
+            }
+
+            // Check game state directly without widgets
+            net.runelite.api.GameState gameState = Microbot.getClient().getGameState();
+            if (gameState != net.runelite.api.GameState.LOGGED_IN) {
+                return false;
+            }
+
+            // Only do occasional widget checks to reduce client thread pressure
+            // Check widgets only every 10 script cycles (50 seconds with 5-second intervals)
+            if (System.currentTimeMillis() % 50000 < 5000) {
+                try {
+                    // Use timeout-safe widget check
+                    return safeWidgetCheck();
+                } catch (Exception e) {
+                    // If widget check fails, assume we're still logged in based on game state
+                    log.debug("Widget check failed, using game state only: {}", e.getMessage());
+                    return true;
+                }
+            }
+
+            // For most cycles, just rely on game state
+            return true;
+
+        } catch (Exception e) {
+            log.debug("Client readiness check failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Safe widget check that won't cause TimeoutExceptions
+     */
+    private boolean safeWidgetCheck() {
+        try {
+            // Use CompletableFuture with timeout to prevent hanging
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return Microbot.isLoggedIn();
+                } catch (Exception e) {
+                    return false;
+                }
+            }).completeOnTimeout(true, 2, TimeUnit.SECONDS).get();
+        } catch (Exception e) {
+            // If anything fails, assume logged in based on game state
+            return true;
+        }
     }
 }

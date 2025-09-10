@@ -761,9 +761,9 @@ public class Rs2Widget {
      */
     private static int countMatchingWords(String[] sourceWords, String[] targetWords) {
         return (int) Arrays.stream(sourceWords)
-            .filter(sourceWord -> 
+            .filter(sourceWord ->
                 Arrays.stream(targetWords)
-                    .anyMatch(targetWord -> 
+                    .anyMatch(targetWord ->
                         targetWord.contains(sourceWord) || sourceWord.contains(targetWord)
                     )
             )

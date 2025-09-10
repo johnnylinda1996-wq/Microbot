@@ -51,10 +51,11 @@ public class MuleTestOverlay extends OverlayPanel {
                     .right(config.muleIntervalHours() + " h")
                     .build());
 
-            // Mule Location
+            // Drop Location (replaces removed mule location)
             panelComponent.getChildren().add(LineComponent.builder()
-                    .left("Mule Location:")
-                    .right(config.muleLocation().toString())
+                    .left("Drop Location:")
+                    .right(String.format("X=%d, Y=%d, Z=%d",
+                        config.dropLocationX(), config.dropLocationY(), config.dropLocationZ()))
                     .build());
 
             // Mule Account

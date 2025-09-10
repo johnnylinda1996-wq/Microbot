@@ -97,28 +97,31 @@ public class MuleScript extends Script {
     }
 
     private void handleWaitingState() {
-        // Poll for new requests every configured interval (reduced for faster response)
+        // Poll for new requests every configured interval
         long currentTime = System.currentTimeMillis();
-        long pollIntervalMs = Math.min((long) config.pollInterval() * 1000, 1000); // Cap at 1 second max
+        long pollIntervalMs = Math.max((long) config.pollInterval() * 1000, 1000); // Minimum 1 second
+
         if (currentTime - lastPollTime >= pollIntervalMs) {
-            log.info("Poll interval reached, last poll was {} ms ago", (currentTime - lastPollTime));
+            log.debug("Polling for new mule requests...");
             pollForNewRequest();
             lastPollTime = currentTime;
         }
     }
 
     private void handleLoggingInState() {
-        if (Microbot.isLoggedIn()) {
-            System.out.println("Client already logged in, proceeding to walking");
+        // Check if already logged in
+        if (Microbot.isLoggedIn() && Microbot.getClient().getGameState() == GameState.LOGGED_IN) {
+            log.info("Already logged in, proceeding to walking");
             currentState = MuleState.WALKING;
-            updateRequestStatus("PROCESSING", "WALKING");
+            updateRequestStatus("PROCESSING", "WALKING_TO_LOCATION");
             return;
         }
 
-        System.out.println("Client not logged in, attempting automatic login...");
+        log.info("Attempting automatic login for mule request...");
+        updateRequestStatus("PROCESSING", "LOGGING_IN");
 
         try {
-            // Use the world selection logic from config
+            // Use world selection logic from config
             int targetWorld;
             if (config.useRandomWorld()) {
                 targetWorld = Login.getRandomWorld(config.isMember());
@@ -128,24 +131,27 @@ public class MuleScript extends Script {
                 log.info("Using specific world: {}", targetWorld);
             }
 
-            // Use the proper Login constructor with world selection
+            // Create login instance
             new Login(targetWorld);
 
-            // Wait for login to complete with timeout
-            boolean loginSuccessful = Global.sleepUntil(Microbot::isLoggedIn, 30000);
+            // Wait for login to complete with proper timeout
+            boolean loginSuccessful = Global.sleepUntil(() -> {
+                return Microbot.isLoggedIn() &&
+                       Microbot.getClient().getGameState() == GameState.LOGGED_IN;
+            }, 45000); // 45 second timeout
 
-            if (loginSuccessful && Microbot.isLoggedIn()) {
-                System.out.println("Successfully logged in automatically to world " + targetWorld);
+            if (loginSuccessful) {
+                log.info("✅ Successfully logged in automatically to world {}", targetWorld);
                 currentState = MuleState.WALKING;
-                updateRequestStatus("PROCESSING", "WALKING");
+                updateRequestStatus("PROCESSING", "WALKING_TO_LOCATION");
             } else {
-                System.err.println("Auto-login failed after timeout");
+                log.error("❌ Auto-login failed after timeout");
                 currentState = MuleState.ERROR;
-                updateRequestStatus("FAILED", "Auto-login timeout");
+                updateRequestStatus("FAILED", "Auto-login timeout - check credentials");
             }
 
         } catch (Exception e) {
-            System.err.println("Error during auto-login: " + e.getMessage());
+            log.error("Error during auto-login: {}", e.getMessage(), e);
             currentState = MuleState.ERROR;
             updateRequestStatus("FAILED", "Login error: " + e.getMessage());
         }
