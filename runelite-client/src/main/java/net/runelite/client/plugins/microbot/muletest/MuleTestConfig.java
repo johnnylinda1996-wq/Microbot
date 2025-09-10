@@ -135,15 +135,23 @@ public interface MuleTestConfig extends Config {
         return "";
     }
 
+    // Price strategy for selling at the GE
+    enum PriceStrategy {
+        MARKET,
+        MINUS_5,
+        MINUS_10,
+        MINUS_20
+    }
+
     @ConfigItem(
-            keyName = "sellAtMarketPrice",
-            name = "Sell at Market Price",
-            description = "Sell at current market price (if false, sells at -5%)",
+            keyName = "sellPriceStrategy",
+            name = "Sell Price Strategy",
+            description = "Choose at what price to sell: Market, -5%, -10%, or -20%",
             section = sellingSection,
             position = 3
     )
-    default boolean sellAtMarketPrice() {
-        return false;
+    default PriceStrategy sellPriceStrategy() {
+        return PriceStrategy.MINUS_10;
     }
 
     @ConfigItem(

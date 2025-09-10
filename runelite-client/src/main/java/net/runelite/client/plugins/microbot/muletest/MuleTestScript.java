@@ -15,6 +15,7 @@ import net.runelite.client.plugins.microbot.util.botmanager.Rs2BotManager;
 import net.runelite.client.plugins.microbot.util.grounditem.Rs2GroundItem;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
+import net.runelite.client.plugins.microbot.util.events.PluginPauseEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +36,7 @@ public class MuleTestScript extends Script {
     private long lastMuleTime = 0;
     private boolean hasDroppedThisRequest = false;
     private WorldPoint originalLocation = null;
+    private volatile boolean noMoreConfiguredItems = false;
 
     // Mule process states
     private enum MuleProcessState {
@@ -48,6 +50,45 @@ public class MuleTestScript extends Script {
         RETURNING_HOME,
         RESUMING_BOTS,
         COMPLETED
+    }
+
+    /**
+     * Checks if the bank still contains any of the configured items (by IDs or Names)
+     */
+    private boolean bankHasConfiguredItems() {
+        try {
+            // Quick check: if bank not open, open it briefly
+            boolean openedHere = false;
+            if (!net.runelite.client.plugins.microbot.util.bank.Rs2Bank.isOpen()) {
+                if (!net.runelite.client.plugins.microbot.util.bank.Rs2Bank.openBank()) {
+                    return false;
+                }
+                openedHere = true;
+                net.runelite.client.plugins.microbot.util.Global.sleep(200, 400);
+            }
+
+            int[] ids = getItemIdsToSell();
+            for (int id : ids) {
+                if (net.runelite.client.plugins.microbot.util.bank.Rs2Bank.hasItem(id)) {
+                    if (openedHere) net.runelite.client.plugins.microbot.util.bank.Rs2Bank.closeBank();
+                    return true;
+                }
+            }
+
+            String[] names = getItemNamesToSell();
+            for (String name : names) {
+                if (name != null && !name.isEmpty() && net.runelite.client.plugins.microbot.util.bank.Rs2Bank.hasItem(name)) {
+                    if (openedHere) net.runelite.client.plugins.microbot.util.bank.Rs2Bank.closeBank();
+                    return true;
+                }
+            }
+
+            if (openedHere) net.runelite.client.plugins.microbot.util.bank.Rs2Bank.closeBank();
+            return false;
+        } catch (Exception e) {
+            log.debug("bankHasConfiguredItems check failed: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -126,7 +167,7 @@ public class MuleTestScript extends Script {
         try {
             currentState = MuleProcessState.PAUSING_BOTS;
 
-            // Step 1: Pause other bots
+            // Step 1: Pause other bots (without pausing our own script globally)
             pausedBots = Rs2BotManager.pauseAllBots(this);
             log.info("⏸️ Paused {} other bot scripts", pausedBots.size());
 
@@ -139,7 +180,10 @@ public class MuleTestScript extends Script {
                     log.info("✅ Item selling completed successfully");
                     // Coin collection is already handled in performBankingAndSelling()
                 } else {
-                    log.warn("⚠️ Item selling failed, continuing with mule request");
+                    log.error("❌ Item selling/banking failed. Stopping mule process and not proceeding to next steps.");
+                    // Fail-fast: do not continue to mule step; resume bots and reset state
+                    resetMuleProcess();
+                    return;
                 }
             }
 
@@ -159,6 +203,8 @@ public class MuleTestScript extends Script {
     private boolean performBankingAndSelling() {
         try {
             log.info("🏪 Starting comprehensive banking and selling process...");
+            // Reset batch-ending flag at the start of a full run
+            noMoreConfiguredItems = false;
 
             // Step 1: Ensure we're on the correct world
             if (!ensureCorrectWorld()) {
@@ -182,6 +228,11 @@ public class MuleTestScript extends Script {
             // Step 3-5: Batch loop -> withdraw until inv full, sell, repeat until no more items in bank
             int batch = 0;
             while (true) {
+                // Safe stop-guard: if we got logged out, abort batch gracefully
+                if (!Microbot.isLoggedIn()) {
+                    log.info("🛑 Not logged in during batch loop, aborting banking/selling");
+                    return false;
+                }
                 batch++;
                 log.info("📦 Preparing batch #{} from bank...", batch);
 
@@ -192,14 +243,22 @@ public class MuleTestScript extends Script {
 
                 // If inventory is empty after banking, nothing to sell -> break
                 if (net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isEmpty()) {
-                    log.info("✅ Geen items om te verkopen in deze batch; bank lijkt leeg voor geselecteerde items");
-                    break;
+                    // Small settle delay before probing the bank again
+                    net.runelite.client.plugins.microbot.util.Global.sleep(300, 600);
+                    if (!noMoreConfiguredItems && bankHasConfiguredItems()) {
+                        log.info("🔁 Inventory leeg maar bank heeft nog items; volgende batch voorbereiden...");
+                        net.runelite.client.plugins.microbot.util.Global.sleep(300, 600);
+                        continue;
+                    } else {
+                        log.info("✅ Geen items om te verkopen; bank leeg voor geselecteerde items");
+                        break;
+                    }
                 }
 
                 if (!handleGrandExchangeSelling()) {
                     log.error("❌ Grand Exchange selling failed");
-                    // Ga door naar volgende iteratie poging of breek uit
-                    break;
+                    // Fail fast: niet doorgaan naar coin-collect en mule
+                    return false;
                 }
 
                 // Als inventory leeg is na sell, kijk of bank nog items heeft; zo ja, volgende batch
@@ -253,6 +312,8 @@ public class MuleTestScript extends Script {
                     // Wait for world switch to complete
                     if (Global.sleepUntil(() -> Microbot.getClient().getWorld() == targetWorld, 15000)) {
                         log.info("✅ Successfully switched to world {}", targetWorld);
+                        // Allow the region, NPCs and interfaces to settle after hop
+                        Global.sleep(5000);
                         return true;
                     } else {
                         log.error("❌ World switch timed out");
@@ -284,24 +345,28 @@ public class MuleTestScript extends Script {
                 log.error("❌ Could not open bank at GE");
                 return false;
             }
+            // Small settle delay for bank interface to fully load
+            Global.sleep(1000);
 
             // Deposit all current inventory
             log.info("📦 Depositing all inventory items...");
             Rs2Bank.depositAll();
             Global.sleep(600, 1200);
 
-            // Set withdraw mode to noted
+            // Set withdraw mode to noted (reliable helper)
             log.info("📋 Setting bank withdraw mode to Note...");
-            Rs2Widget.clickWidget("Note", true);
-            Global.sleep(250, 450);
+            net.runelite.client.plugins.microbot.util.bank.Rs2Bank.setWithdrawAsNote();
+            Global.sleep(300, 600);
 
             // Withdraw all items that need to be sold
             boolean anyItemsWithdrawn = withdrawAllConfiguredItems();
 
             if (!anyItemsWithdrawn) {
-                log.warn("⚠️ No items were withdrawn from bank");
+                log.warn("⚠️ No items were withdrawn from bank (end of batches)");
                 Rs2Bank.closeBank();
-                return false;
+                // Mark that there are no more configured items so the batch loop can break cleanly
+                noMoreConfiguredItems = true;
+                return true;
             }
 
             // Close bank
@@ -325,12 +390,14 @@ public class MuleTestScript extends Script {
         int totalWithdrawn = 0;
 
         try {
+            if (!super.run()) return false;
             // Get item IDs and names to withdraw
             int[] itemIds = getItemIdsToSell();
             String[] itemNames = getItemNamesToSell();
 
             // Withdraw by item IDs
             for (int itemId : itemIds) {
+                if (!super.run()) break;
                 if (net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()) {
                     log.info("📦 Inventory is full, stop withdrawing by IDs");
                     break;
@@ -348,6 +415,7 @@ public class MuleTestScript extends Script {
                         log.info("📦 Large quantity detected - handling multiple inventory loads");
                         while (!net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()
                                 && Rs2Bank.hasItem(itemId) && Rs2Inventory.hasItem(itemId)) {
+                            if (!super.run()) break;
                             // Make space by noting what we have
                             int inventoryCount = Rs2Inventory.count(itemId);
                             totalWithdrawn += inventoryCount;
@@ -369,6 +437,7 @@ public class MuleTestScript extends Script {
 
             // Withdraw by item names (if no IDs specified or as additional)
             for (String itemName : itemNames) {
+                if (!super.run()) break;
                 if (net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()) {
                     log.info("📦 Inventory is full, stop withdrawing by names");
                     break;
@@ -384,6 +453,7 @@ public class MuleTestScript extends Script {
                     if (bankQuantity > 28) {
                         while (!net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.isFull()
                                 && Rs2Bank.hasItem(itemName) && Rs2Inventory.hasItem(itemName)) {
+                            if (!super.run()) break;
                             int inventoryCount = Rs2Inventory.count(itemName);
                             totalWithdrawn += inventoryCount;
                             log.info("📊 Withdrew {} '{}' so far, continuing...", inventoryCount, itemName);
@@ -420,6 +490,42 @@ public class MuleTestScript extends Script {
         try {
             log.info("🛒 Starting Grand Exchange selling process...");
 
+            // Verkoop alleen verhandelbare items die in de configuratie zijn opgegeven (IDs of namen)
+            int[] allowedIds = getItemIdsToSell();
+            java.util.Set<Integer> allowedIdSet = java.util.Arrays.stream(allowedIds).boxed().collect(java.util.stream.Collectors.toSet());
+            java.util.Set<String> allowedNameSet = new java.util.HashSet<>();
+            for (String n : getItemNamesToSell()) { if (n != null && !n.isEmpty()) allowedNameSet.add(n.toLowerCase()); }
+
+            if (allowedIdSet.isEmpty() && allowedNameSet.isEmpty()) {
+                log.warn("⚠️ Geen item IDs of namen geconfigureerd om te verkopen. Sla GE-verkoop over.");
+                return false;
+            }
+
+            // Verzamel de items VOORDAT we de GE openen (zoals in BankSellerScript),
+            // gebruik items() zonder predicate en filter per item in de loop om edgecases te voorkomen
+            final java.util.List<net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel> items =
+                    net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.items()
+                            .collect(java.util.stream.Collectors.toList());
+            if (items.isEmpty()) {
+                log.warn("⚠️ Inventory is leeg vlak voor GE-open; sla GE-verkoop over");
+                return false;
+            }
+
+            // Debug: laat zien welke items we gaan verkopen
+            try {
+                String dbg = items.stream().map(net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel::getName)
+                        .distinct().limit(10).reduce((a,b) -> a + ", " + b).orElse("<none>");
+                log.info("🧾 Items to sell (sample): {} (total {} stacks)", dbg, items.size());
+            } catch (Exception ignored) {}
+
+            // Extra debug: huidige inventory stack namen
+            try {
+                String invDbg = net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.all()
+                        .stream().map(net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel::getName)
+                        .distinct().limit(12).reduce((a,b) -> a + ", " + b).orElse("<empty>");
+                log.info("🎒 Inventory now: {}", invDbg);
+            } catch (Exception ignored) {}
+
             // Open Grand Exchange via utility (handles clerk/booth and pin)
             if (!net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.openExchange()) {
                 log.error("❌ Failed to open Grand Exchange");
@@ -427,49 +533,97 @@ public class MuleTestScript extends Script {
             }
             net.runelite.client.plugins.microbot.util.Global.sleepUntil(
                     net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange::isOpen);
-
-            // Sell alle verhandelbare items uit de inventory, -10% onder prijs
-            final java.util.List<net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel> items =
-                    net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.all(
-                            net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel::isTradeable);
-            if (items.isEmpty()) {
-                log.warn("⚠️ Geen verhandelbare items in de inventory");
-                return false;
-            }
+            // Small settle delay for GE interface
+            net.runelite.client.plugins.microbot.util.Global.sleep(300, 600);
 
             int offersCreated = 0;
             for (var item : items) {
-                // Wacht tot er een vrij GE-slot is; verzamel tussendoor verkopen
-                while (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlot() == null) {
+                // Sla coins en niet-geconfigureerde items over
+                String nm = item.getName() != null ? item.getName().toLowerCase() : "";
+                if (nm.equals("coins")) continue;
+                boolean allowed = allowedIdSet.contains(item.getId()) || allowedNameSet.stream().anyMatch(n -> !n.isEmpty() && nm.contains(n));
+                if (!allowed) continue;
+                if (!super.run()) {
+                    log.info("🛑 Script stop detected during GE selling");
+                    break;
+                }
+
+                // Wachten op vrije slots; indien verkopen klaar, eerst collecten naar bank
+                while (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlotsCount() == 0) {
+                    if (!super.run()) break;
                     if (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.hasSoldOffer()) {
-                        net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.collectAllToBank();
+                        if (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.openExchange()) {
+                            net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                                    net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange::isOpen);
+                            net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.collectAllToBank();
+                            net.runelite.client.plugins.microbot.util.Global.sleepUntil(() ->
+                                    !net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.hasSoldOffer());
+                        }
                     }
                     net.runelite.client.plugins.microbot.util.Global.sleepUntil(() ->
-                            net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlot() != null
+                            net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlotsCount() > 0
                                     || net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.hasSoldOffer());
                 }
-
-                if (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlot() == null) {
-                    break; // geen slots, breek de verkoop-loop
+                if (net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getAvailableSlotsCount() == 0) {
+                    break;
                 }
 
-                // Bouw -10% SELL verzoek op naam zodat noted/unnoted vanzelf werkt
-                var request = net.runelite.client.plugins.microbot.util.grandexchange.GrandExchangeRequest.builder()
-                        .action(net.runelite.client.plugins.microbot.util.grandexchange.GrandExchangeAction.SELL)
-                        .itemName(item.getName())
-                        .quantity(item.getQuantity())
-                        .percent(-10)
-                        .closeAfterCompletion(false)
-                        .build();
+                // Align with BankSellerScript, but fallback when price lookup is unreliable
+                int basePrice = net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.getPrice(item.getId());
+                int percent = 0;
+                try {
+                    switch (config.sellPriceStrategy()) {
+                        case MINUS_5: percent = -5; break;
+                        case MINUS_10: percent = -10; break;
+                        case MINUS_20: percent = -20; break;
+                        case MARKET:
+                        default: percent = 0; break;
+                    }
+                } catch (Exception ignored) { percent = 0; }
 
-                boolean placed = net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.processOffer(request);
-                // Terug naar overzicht, wacht tot item niet meer in inventory staat (exacte naam)
-                net.runelite.client.plugins.microbot.util.Global.sleepUntil(
-                        net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange::isOpen);
-                net.runelite.client.plugins.microbot.util.Global.sleepUntil(() ->
-                        !net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.hasItem(item.getName(), true));
+                if (basePrice <= 1) {
+                    // Manual fallback: open offer via inventory and apply -5% clicks
+                    if (!net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.interact(item.getName(), "Offer", true)) {
+                        continue;
+                    }
+                    net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                            net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange::isOfferScreenOpen);
+                    net.runelite.client.plugins.microbot.util.widget.Rs2Widget.clickWidget("All");
+                    net.runelite.client.plugins.microbot.util.Global.sleep(200, 350);
+                    int clicks = 0;
+                    switch (config.sellPriceStrategy()) {
+                        case MINUS_5: clicks = 1; break;
+                        case MINUS_10: clicks = 2; break;
+                        case MINUS_20: clicks = 4; break;
+                        case MARKET:
+                        default: clicks = 0; break;
+                    }
+                    for (int i = 0; i < clicks; i++) {
+                        if (!net.runelite.client.plugins.microbot.util.widget.Rs2Widget.clickWidget("-5%")) break;
+                        net.runelite.client.plugins.microbot.util.Global.sleep(150, 300);
+                    }
+                    net.runelite.client.plugins.microbot.util.widget.Rs2Widget.clickWidget("Confirm");
+                    net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                            () -> !net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.isOfferScreenOpen());
+                    net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                            () -> !net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.hasItem(item.getName(), true));
+                    offersCreated++;
+                } else {
+                    // Normal path: processOffer with base price and percent
+                    var request = net.runelite.client.plugins.microbot.util.grandexchange.GrandExchangeRequest.builder()
+                            .action(net.runelite.client.plugins.microbot.util.grandexchange.GrandExchangeAction.SELL)
+                            .itemName(item.getName())
+                            .quantity(item.getQuantity())
+                            .price(basePrice)
+                            .percent(percent)
+                            .closeAfterCompletion(false)
+                            .build();
 
-                if (placed) {
+                    net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange.processOffer(request);
+                    net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                            net.runelite.client.plugins.microbot.util.grandexchange.Rs2GrandExchange::isOpen);
+                    net.runelite.client.plugins.microbot.util.Global.sleepUntil(
+                            () -> !net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.hasItem(item.getName(), true));
                     offersCreated++;
                 }
             }
@@ -554,15 +708,23 @@ public class MuleTestScript extends Script {
                                 Global.sleep(300, 600);
                             }
 
-                            // Set price (market price or -5%)
-                            if (!config.sellAtMarketPrice()) {
-                                // Click the -5% button if available, or manually set price
-                                if (!Rs2Widget.clickWidget("-5%")) {
-                                    // Fallback: try to manually set price lower
-                                    adjustPriceDown();
+                            // Set price per configured strategy: MARKET, -5%, -10%, -20%
+                            try {
+                                int clicks = 0;
+                                switch (config.sellPriceStrategy()) {
+                                    case MINUS_5: clicks = 1; break;
+                                    case MINUS_10: clicks = 2; break;
+                                    case MINUS_20: clicks = 4; break;
+                                    case MARKET:
+                                    default: clicks = 0; break;
                                 }
-                                Global.sleep(300, 600);
-                            }
+                                for (int i = 0; i < clicks; i++) {
+                                    if (!Rs2Widget.clickWidget("-5%")) {
+                                        adjustPriceDown();
+                                    }
+                                    Global.sleep(250, 450);
+                                }
+                            } catch (Exception ignored) { }
 
                             // Confirm the sale
                             if (Rs2Widget.clickWidget("Confirm")) {
@@ -783,9 +945,23 @@ public class MuleTestScript extends Script {
 
             log.info("📤 Requesting mule for {} item types...", items.size());
 
-            // Request mule WITHOUT sending a location (user sets location separately on mule & muletest)
+            // Request mule WITH drop location (bridge requires non-blank location)
             MuleBridgeClient client = MuleBridgeClient.getInstance(config.bridgeUrl());
-            String location = ""; // do not include location in payload
+            // Bouw een geldige location string (NotBlank vereist door de bridge)
+            String location;
+            try {
+                int lx = config.dropLocationX();
+                int ly = config.dropLocationY();
+                int lz = config.dropLocationZ();
+                location = lx + "," + ly + "," + lz;
+            } catch (Exception ex) {
+                // Fallback naar GE coördinaten als parsing faalt
+                location = "3164,3486,0";
+            }
+            if (location == null || location.isBlank()) {
+                location = "3164,3486,0";
+            }
+            log.info("📍 Using drop location for mule request: {}", location);
 
             CompletableFuture<String> muleRequest = client.requestMule(config.muleAccount(), location, items);
 
@@ -921,6 +1097,12 @@ public class MuleTestScript extends Script {
                 pausedBots.clear();
             }
 
+            // Release global pause flags similar to BreakHandler
+            try {
+                PluginPauseEvent.setPaused(false);
+                Microbot.pauseAllScripts.compareAndSet(true, false);
+            } catch (Exception ignored) {}
+
             // Reset for next mule cycle
             resetMuleProcess();
             lastMuleTime = System.currentTimeMillis();
@@ -959,6 +1141,12 @@ public class MuleTestScript extends Script {
             Rs2BotManager.resumeBots(pausedBots);
             pausedBots.clear();
         }
+
+        // Also release global pause in emergency reset
+        try {
+            PluginPauseEvent.setPaused(false);
+            Microbot.pauseAllScripts.compareAndSet(true, false);
+        } catch (Exception ignored) {}
     }
 
     /**
